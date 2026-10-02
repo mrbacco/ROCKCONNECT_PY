@@ -1,0 +1,26 @@
+{#
+  File: feed.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-02
+#}
+{% extends "layout.html" %}
+{% block title %}Feed - rockconnect{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-lg-6 offset-lg-3 col-md-8 offset-md-2">
+    {% include "_composer.html" %}
+
+    {% for p in posts %}
+      {% include "_post.html" %}
+    {% else %}
+      <div class="card fb-card"><div class="card-body text-center text-muted">
+        No posts yet. Be the first to share something!
+      </div></div>
+    {% endfor %}
+
+    {% if has_more %}
+    <a class="btn btn-light btn-block mb-3" href="{{ url_for('feed.index', before=next_before) }}">Older posts</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

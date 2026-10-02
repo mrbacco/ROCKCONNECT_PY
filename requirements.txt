@@ -1,0 +1,10 @@
+# File: requirements.txt
+# Author: mrbacco04@gmail.com
+# Date: 2026-10-02
+Flask>=3.0
+bcrypt>=4.0
+SQLAlchemy>=2.0
+# remote database drivers (install only the one you use):
+# psycopg2-binary>=2.9   # PostgreSQL
+# pymysql>=1.1           # MySQL/MariaDB
+pytest>=8.0

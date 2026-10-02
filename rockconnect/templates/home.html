@@ -1,0 +1,23 @@
+{#
+  File: home.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-02
+#}
+{# Landing page for visitors: no menu bar, only sign in / sign up. #}
+{% extends "layout.html" %}
+{% block title %}Welcome to rockconnect{% endblock %}
+{% block body_class %}bkimg{% endblock %}
+{% block container_class %}container landing{% endblock %}
+{% block content %}
+<div class="landing-card card fb-card">
+  <div class="card-body text-center p-4">
+    <h1 class="landing-title">rockconnect</h1>
+    <p class="lead text-muted mb-4">Connect with people who love rock music. Share posts and photos,
+      comment on what others share, and chat with them privately.</p>
+    <a class="btn btn-primary btn-lg btn-block" href="{{ url_for('auth.signin') }}">Sign in</a>
+    <div class="text-muted my-2">or</div>
+    <a class="btn btn-success btn-lg btn-block" href="{{ url_for('auth.signup') }}">Create a new account</a>
+  </div>
+</div>
+{% endblock %}
+{% block footer %}{% endblock %}

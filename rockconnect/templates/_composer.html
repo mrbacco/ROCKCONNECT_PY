@@ -1,0 +1,28 @@
+{#
+  File: _composer.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-02
+#}
+{# "What's on your mind?" box. Included by feed.html and by your own profile page. #}
+{% from "_macros.html" import avatar %}
+<form class="card fb-card composer" method="POST" action="{{ url_for('feed.create_post') }}"
+      enctype="multipart/form-data">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+  <input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+  <div class="card-body">
+    <div class="d-flex">
+      {{ avatar(g.user['username'], g.user['id']) }}
+      <textarea class="form-control composer-text ml-2" name="body" rows="2" maxlength="5000"
+                placeholder="What's on your mind, {{ g.user['name'].split()[0] }}?"></textarea>
+    </div>
+    <hr class="my-2">
+    <div class="d-flex justify-content-between align-items-center">
+      <label class="mb-0 photo-pick">
+        <span class="text-success">&#128247; Photo</span>
+        <input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp" class="d-none"
+               onchange="this.previousElementSibling.textContent = this.files.length ? '✔ ' + this.files[0].name : '📷 Photo'">
+      </label>
+      <button class="btn btn-primary btn-sm px-4" type="submit">Post</button>
+    </div>
+  </div>
+</form>

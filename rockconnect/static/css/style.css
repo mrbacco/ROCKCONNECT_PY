@@ -1,0 +1,99 @@
+/*
+ * File: style.css
+ * Author: mrbacco04@gmail.com
+ * Date: 2026-10-02
+ *
+ * Facebook-style look: grey page, blue navbar, white rounded cards, round avatars,
+ * Messenger-style chat bubbles. The rock photo is kept for home / sign in / sign up.
+ */
+
+/* ---------- page ---------- */
+.bg-feed { background: #f0f2f5; }
+
+.bkimg {
+    background-image: url(/static/images/rockconnect.jpg);
+    background-size: cover;
+    background-attachment: fixed;
+}
+
+.container.content {
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 6px;
+    padding: 1.5rem;
+    margin-top: 1rem;
+}
+
+.fb-container { padding-top: 1.25rem; }
+
+/* landing / sign in / sign up: no menu bar, one centred card on the rock photo */
+.landing { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; }
+.landing-card { width: 100%; max-width: 440px; margin: 1rem auto; background: rgba(255, 255, 255, .95); }
+.landing-title { font-weight: 800; color: #1877f2; letter-spacing: .5px; }
+.landing-title a, .landing-title a:hover { color: inherit; text-decoration: none; }
+
+.navbar-fb { background: #1877f2; }
+.navbar-fb .navbar-brand { font-weight: 700; letter-spacing: .5px; }
+
+/* ---------- cards ---------- */
+.fb-card {
+    border: 0;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .2);
+    margin-bottom: 1rem;
+}
+
+.author { font-weight: 600; color: #050505; }
+.author:hover { text-decoration: underline; color: #050505; }
+
+/* ---------- avatars (colour picked by user id % 6) ---------- */
+.avatar {
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 40px; height: 40px; border-radius: 50%;
+    color: #fff; font-weight: 700; font-size: 1.1rem;
+}
+.avatar.sm { width: 32px; height: 32px; font-size: .9rem; }
+.avatar.lg { width: 84px; height: 84px; font-size: 2.4rem; }
+.av0 { background: #1877f2; }
+.av1 { background: #e4405f; }
+.av2 { background: #42b72a; }
+.av3 { background: #f7b928; color: #333; }
+.av4 { background: #8e44ad; }
+.av5 { background: #e67e22; }
+
+/* ---------- composer + posts ---------- */
+.composer-text { border-radius: 20px; background: #f0f2f5; border: 0; resize: none; }
+.photo-pick { cursor: pointer; }
+
+.post-body { white-space: pre-wrap; word-wrap: break-word; margin-bottom: .5rem; }
+.post-image { width: 100%; max-height: 520px; object-fit: cover; background: #000; }
+
+.action-btn { background: transparent; border: 0; color: #65676b; font-weight: 600; }
+.action-btn:hover { background: #f0f2f5; }
+.action-btn.liked { color: #1877f2; }
+
+.comment-bubble { background: #f0f2f5; border-radius: 16px; padding: .35rem .8rem; display: inline-block; }
+.comment-bubble .post-body { display: block; margin: 0; }
+.comment-input { border-radius: 16px; background: #f0f2f5; border: 0; }
+
+/* ---------- chat (Messenger style) ---------- */
+.chat-pane { display: flex; flex-direction: column; height: 70vh; min-height: 420px; }
+.chat-list { max-height: 70vh; overflow-y: auto; }
+.chat-list .active-chat { background: #e7f3ff; }
+
+.chat-messages {
+    flex: 1; overflow-y: auto; padding: 1rem;
+    display: flex; flex-direction: column;
+}
+.message { max-width: 75%; margin-bottom: .35rem; padding: .45rem .85rem; border-radius: 18px; }
+.message .body { white-space: pre-wrap; word-wrap: break-word; }
+.message .meta { font-size: .68rem; opacity: .65; text-align: right; }
+.message.mine { align-self: flex-end; background: #0084ff; color: #fff; border-bottom-right-radius: 4px; }
+.message.theirs { align-self: flex-start; background: #e4e6eb; color: #050505; border-bottom-left-radius: 4px; }
+
+.chat-form { border-top: 1px solid #e4e6eb; }
+.chat-form textarea { border-radius: 20px; resize: none; max-height: 120px; }
+
+@media (max-width: 767px) {
+    .chat-pane { height: 60vh; }
+    .message { max-width: 90%; }
+}

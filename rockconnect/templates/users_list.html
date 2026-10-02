@@ -1,0 +1,53 @@
+{#
+  File: users_list.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-02
+#}
+{% extends "layout.html" %}
+{% from "_macros.html" import avatar %}
+{% block title %}{{ user['username'] }} - rockconnect{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-lg-6 offset-lg-3 col-md-8 offset-md-2">
+    <div class="card fb-card">
+      <div class="card-body d-flex align-items-center">
+        {{ avatar(user['username'], user['id'], 'lg') }}
+        <div class="ml-3 flex-grow-1">
+          <h2 class="mb-0">{{ user['name'] }}</h2>
+          <div class="text-muted">@{{ user['username'] }}</div>
+        </div>
+        {% if g.user and g.user['id'] != user['id'] %}
+        <form method="POST" action="{{ url_for('conversations.start', user_id=user['id']) }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <button class="btn btn-primary" type="submit">&#128172; Message</button>
+        </form>
+        {% elif g.user %}
+        <a class="btn btn-light" href="{{ url_for('views.edit') }}">Edit profile</a>
+        {% endif %}
+      </div>
+      <div class="card-body border-top">
+        <h6 class="text-muted">About</h6>
+        <p class="post-body mb-0">{{ user['about'] }}</p>
+      </div>
+    </div>
+
+    {% if g.user %}
+      {% if g.user['id'] == user['id'] %}{% include "_composer.html" %}{% endif %}
+      {% for p in posts %}
+        {% include "_post.html" %}
+      {% else %}
+        <div class="card fb-card"><div class="card-body text-center text-muted">No posts yet.</div></div>
+      {% endfor %}
+      {% if has_more %}
+      <a class="btn btn-light btn-block mb-3"
+         href="{{ url_for('views.profile', user_id=user['id'], before=next_before) }}">Older posts</a>
+      {% endif %}
+    {% else %}
+      <div class="card fb-card"><div class="card-body text-center">
+        <a href="{{ url_for('auth.signin') }}">Sign in</a> or <a href="{{ url_for('auth.signup') }}">sign up</a>
+        to see {{ user['username'] }}'s posts.
+      </div></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

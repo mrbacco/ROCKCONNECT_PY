@@ -1,0 +1,9 @@
+{#
+  File: _macros.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-02
+#}
+{# round avatar with the user's initial; the colour comes from the user id (6 colours in style.css) #}
+{% macro avatar(username, user_id, size='') -%}
+<span class="avatar av{{ user_id % 6 }} {{ size }}" aria-hidden="true">{{ username[0]|upper }}</span>
+{%- endmacro %}

@@ -1,0 +1,8 @@
+# File: .gitignore
+# Author: mrbacco04@gmail.com
+# Date: 2026-10-02
+__pycache__/
+*.pyc
+.venv/
+instance/
+.pytest_cache/

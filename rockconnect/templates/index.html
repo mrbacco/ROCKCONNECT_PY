@@ -1,0 +1,27 @@
+{#
+  File: index.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-02
+#}
+{% extends "layout.html" %}
+{% from "_macros.html" import avatar %}
+{% block content %}
+<div class="row">
+  <div class="col-lg-6 offset-lg-3 col-md-8 offset-md-2">
+    <h2>People{% if q %} matching "{{ q }}"{% endif %}</h2>
+    <div class="card fb-card">
+      <ul class="list-group list-group-flush">
+        {% for user in users %}
+        <li class="list-group-item d-flex align-items-center">
+          {{ avatar(user['username'], user['id']) }}
+          <a class="author ml-2" href="{{ url_for('views.profile', user_id=user['id']) }}">{{ user['username'] }}</a>
+          <span class="text-muted ml-2">{{ user['name'] }}</span>
+        </li>
+        {% else %}
+        <li class="list-group-item">No users found.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}
