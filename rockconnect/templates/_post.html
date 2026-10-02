@@ -43,8 +43,8 @@
         <button class="btn btn-block btn-light action-btn {{ 'liked' if p['liked_by_me'] }}" type="submit">
           &#128077; {{ 'Liked' if p['liked_by_me'] else 'Like' }}</button>
       </form>
-      <a class="btn btn-block btn-light action-btn flex-fill mt-0" href="#comment-{{ p['id'] }}"
-         onclick="document.getElementById('comment-{{ p['id'] }}').focus(); return false;">&#128172; Comment</a>
+      {# a <label for=...> focuses the comment box natively when clicked: no inline JavaScript needed #}
+      <label class="btn btn-block btn-light action-btn flex-fill mt-0 mb-0" for="comment-{{ p['id'] }}">&#128172; Comment</label>
     </div>
 
     {% for c in comments_by_post[p['id']] %}

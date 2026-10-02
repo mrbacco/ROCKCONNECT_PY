@@ -50,8 +50,6 @@ number of users or deployments. Terms and price are agreed individually.
 
 ## Important
 
-**No commercial rights are granted by this file alone.** A separate signed written agreement is required before any
-proprietary commercial use that is not compliant with the AGPL. Until then, the only license that applies to you is
-the GNU AGPL v3.
+**No commercial rights are granted by this file alone.** A separate signed written agreement is required before any proprietary commercial use that is not compliant with the AGPL. Until then, the only license that applies to you is the GNU AGPL v3.
 
 This document is a license template, not legal advice. Have a solicitor review it before relying on it in a contract.
