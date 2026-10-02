@@ -57,6 +57,13 @@ rockconnect/
 tests/                  pytest suite (python -m pytest)
 ```
 
+## License
+Copyright (C) 2026 mrbacco. Dual licensed, you choose one:
+
+- **GNU AGPL v3** for open-source use, see [LICENSE-AGPL](LICENSE-AGPL).
+- **Commercial license** for closed-source or proprietary products and services, see
+  [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md). Contact mrbacco04@gmail.com.
+
 ## Security notes
 CSRF token on every form, escaped output, photos checked by file content and stored under random names,
 private chats visible only to their two members, and no passwords, hashes or message text in the logs.
