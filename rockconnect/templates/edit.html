@@ -6,7 +6,7 @@
 {% extends "layout.html" %}
 {% block content %}
 <div class="row">
-  <div class="col-md-6 offset-md-3 card fb-card card-body">
+  <div class="col-md-6 offset-md-3 card rc-card card-body">
     <h1 class="h2 mb-3">Edit profile</h1>
     <form method="POST" action="{{ url_for('views.edit') }}">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">

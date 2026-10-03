@@ -30,8 +30,12 @@ class _QuietPollingFilter(logging.Filter):
 
 def create_app(test_config=None):
     # application factory: builds and configures one Flask app instance
-    app = Flask(__name__, instance_relative_config=True)
-    bac_log("app", "create_app() starting")
+    # The instance folder holds the database file and the uploaded photos (your real data).
+    # Tests pass their own INSTANCE_PATH (a temp folder) so running them can never create,
+    # touch or tempt anyone to clean up the real instance folder.
+    app = Flask(__name__, instance_path=(test_config or {}).get("INSTANCE_PATH"),
+                instance_relative_config=True)
+    bac_log("app", "create_app() starting, data folder: %s" % app.instance_path)
     wz = logging.getLogger("werkzeug")
     if not any(isinstance(f, _QuietPollingFilter) for f in wz.filters):
         wz.addFilter(_QuietPollingFilter())

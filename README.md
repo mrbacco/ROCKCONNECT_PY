@@ -21,9 +21,15 @@ Express, MongoDB and Pug).
   (no page reload) and a navbar badge shows unread chats.
 - **People:** search for members by username or name.
 
+## Look and feel
+A dark "stage" theme of its own: near-black pages, a single amber stage-light accent, Roboto Condensed type,
+sharp corners with hard offset shadows (gig-poster style) and guitar-pick shaped avatars. Likes are "Rock on" and
+chats are "Backstage chats". All styling is in `rockconnect/static/css/style.css`, driven by a handful of colour
+variables at the top of the file.
+
 ## Tech
 Python 3.12, Flask, Jinja2 templates, SQLAlchemy (SQLite by default, PostgreSQL or MySQL via `DATABASE_URL`),
-bcrypt, Bootstrap 4, plain JavaScript (`fetch` polling for the chat), pytest.
+bcrypt, Bootstrap 4 (restyled), Roboto Condensed (Google Fonts), plain JavaScript (`fetch` polling for the chat), pytest.
 
 ## Run it
 ```
@@ -32,7 +38,9 @@ python -m venv .venv
 pip install -r requirements.txt
 python run.py            # open http://localhost:3000
 ```
-The local SQLite database and uploaded photos are created in `instance/` on first run.
+The local SQLite database and uploaded photos are created in `instance/` on first run and **persist across
+restarts**. The start-up log prints the exact data folder. `instance/` is not in git: back it up by copying the
+whole folder, and never delete it unless you want to erase every account, post and photo.
 
 | Environment variable | Purpose |
 |---|---|

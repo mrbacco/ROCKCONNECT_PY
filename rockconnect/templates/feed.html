@@ -13,13 +13,13 @@
     {% for p in posts %}
       {% include "_post.html" %}
     {% else %}
-      <div class="card fb-card"><div class="card-body text-center text-muted">
+      <div class="card rc-card"><div class="card-body text-center text-muted">
         No posts yet. Be the first to share something!
       </div></div>
     {% endfor %}
 
     {% if has_more %}
-    <a class="btn btn-light btn-block mb-3" href="{{ url_for('feed.index', before=next_before) }}">Older posts</a>
+    <a class="btn btn-ghost btn-block mb-3" href="{{ url_for('feed.index', before=next_before) }}">Older posts</a>
     {% endif %}
   </div>
 </div>

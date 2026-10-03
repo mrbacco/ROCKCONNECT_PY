@@ -32,7 +32,7 @@ def send_json(client, conv_id, body):
 # ------------------------------------------------------------------ feed
 def test_signup_signs_in_and_lands_on_feed(client):
     page = signup(client).data
-    assert b"Welcome to rockconnect" in page and b"on your mind" in page
+    assert b"Welcome to rockconnect" in page and b"listening to" in page
 
 
 def test_feed_requires_login_but_profile_stays_public(client):
@@ -84,9 +84,9 @@ def test_photo_upload_is_validated_and_served_to_members_only(client):
 def test_like_toggle_and_comment(client):
     bacco, rita = two_users(client)
     post(bacco, "likeable")
-    assert b"Liked" in act(rita, "/posts/1/like").data
-    assert b"&#128077; 1" in rita.get("/feed").data
-    assert b"&#128077; 1" not in act(rita, "/posts/1/like").data  # second click = unlike
+    assert b"Rocked" in act(rita, "/posts/1/like").data
+    assert b"&#129304; 1" in rita.get("/feed").data
+    assert b"&#129304; 1" not in act(rita, "/posts/1/like").data  # second click = unlike
 
     assert b"great post" in act(rita, "/posts/1/comments", body="great post").data
     assert b"1 comment" in bacco.get("/feed").data

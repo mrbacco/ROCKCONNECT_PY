@@ -8,9 +8,9 @@
 {% block body_class %}bkimg{% endblock %}
 {% block container_class %}container landing{% endblock %}
 {% block content %}
-<div class="landing-card card fb-card">
+<div class="landing-card card rc-card">
   <div class="card-body p-4">
-    <h1 class="landing-title text-center"><a href="{{ url_for('views.home') }}">rockconnect</a></h1>
+    <h1 class="landing-title text-center"><a class="brand" href="{{ url_for('views.home') }}">rock<span>connect</span></a></h1>
     <h2 class="h4 text-center mb-3">Create a new account</h2>
     <form method="POST" action="{{ url_for('auth.signup') }}">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
@@ -37,7 +37,7 @@
         <label for="about">About me</label>
         <textarea id="about" class="form-control" name="about" rows="3" required>{{ form.get('about', '') }}</textarea>
       </div>
-      <button class="btn btn-success btn-block" type="submit">Sign up</button>
+      <button class="btn btn-primary btn-block" type="submit">Sign up</button>
     </form>
     <hr>
     <p class="text-center mb-0">Already a member? <a href="{{ url_for('auth.signin') }}">Sign in</a></p>

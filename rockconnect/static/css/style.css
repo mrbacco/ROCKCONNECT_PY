@@ -3,96 +3,229 @@
  * Author: mrbacco04@gmail.com
  * Date: 2026-10-02
  *
- * Facebook-style look: grey page, blue navbar, white rounded cards, round avatars,
- * Messenger-style chat bubbles. The rock photo is kept for home / sign in / sign up.
+ * "Stage" theme for rockconnect: near-black page, amber stage-light accent, Roboto Condensed
+ * type, sharp corners, hard offset shadows (gig-poster look) and guitar-pick shaped avatars.
+ * It overrides Bootstrap 4, which is loaded first.
  */
 
-/* ---------- page ---------- */
-.bg-feed { background: #f0f2f5; }
+/* ---------- design tokens ---------- */
+:root {
+    --bg: #0d0d0f;
+    --panel: #17171a;
+    --panel-2: #212126;
+    --input: #101013;
+    --line: #303038;
+    --text: #ece8df;          /* warm off-white */
+    --muted: #9b978d;
+    --amber: #ffb000;         /* the one accent colour: a stage light */
+    --amber-hi: #ffc233;
+    --danger: #e5383b;
+    --font: "Roboto Condensed", "Roboto Narrow", "Arial Narrow", "Helvetica Neue Condensed",
+            sans-serif-condensed, sans-serif;
+    color-scheme: dark;       /* dark scrollbars and native form controls */
+}
 
+/* ---------- base ---------- */
+html { font-size: 17px; }       /* condensed type reads small, so go a little bigger */
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-weight: 400;
+    line-height: 1.45;
+}
+::selection { background: var(--amber); color: #111; }
+
+a { color: var(--amber); }
+a:hover { color: var(--amber-hi); }
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+hr { border-top: 1px solid var(--line); }
+.text-muted { color: var(--muted) !important; }
+.border-top, .border-bottom { border-color: var(--line) !important; }
+
+.bg-stage {
+    background-color: var(--bg);
+    background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.018) 0 2px, transparent 2px 14px);
+}
 .bkimg {
-    background-image: url(/static/images/rockconnect.jpg);
-    background-size: cover;
-    background-attachment: fixed;
+    background: linear-gradient(rgba(8,8,10,.78), rgba(8,8,10,.9)),
+                url(/static/images/rockconnect.jpg) center / cover fixed;
 }
+.rc-container { padding-top: 1.5rem; }
 
-.container.content {
-    background: rgba(255, 255, 255, 0.9);
-    border-radius: 6px;
-    padding: 1.5rem;
-    margin-top: 1rem;
+/* ---------- brand ---------- */
+.brand {
+    font-weight: 900; text-transform: uppercase; letter-spacing: .12em; color: #fff;
 }
+.brand span { color: var(--amber); }
+.brand:hover { color: #fff; text-decoration: none; }
 
-.fb-container { padding-top: 1.25rem; }
+/* ---------- navbar ---------- */
+.navbar-rc { background: #000; border-bottom: 2px solid var(--amber); }
+.navbar-rc .navbar-brand { font-size: 1.35rem; }
+.navbar-rc .nav-link {
+    color: #cfcbc2; text-transform: uppercase; letter-spacing: .09em;
+    font-weight: 500; font-size: .92rem;
+}
+.navbar-rc .nav-link:hover, .navbar-rc .nav-link.text-white:hover { color: var(--amber) !important; }
 
-/* landing / sign in / sign up: no menu bar, one centred card on the rock photo */
+/* ---------- landing / sign in / sign up ---------- */
 .landing { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; }
-.landing-card { width: 100%; max-width: 440px; margin: 1rem auto; background: rgba(255, 255, 255, .95); }
-.landing-title { font-weight: 800; color: #1877f2; letter-spacing: .5px; }
-.landing-title a, .landing-title a:hover { color: inherit; text-decoration: none; }
-
-.navbar-fb { background: #1877f2; }
-.navbar-fb .navbar-brand { font-weight: 700; letter-spacing: .5px; }
-
-/* ---------- cards ---------- */
-.fb-card {
-    border: 0;
-    border-radius: 8px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, .2);
+.landing-card {
+    width: 100%; max-width: 440px; margin: 1.5rem auto;
+    background: rgba(13, 13, 15, .9);
+    box-shadow: 8px 8px 0 var(--amber);
+}
+.landing-kicker {
+    text-transform: uppercase; letter-spacing: .38em; font-size: .72rem;
+    color: var(--amber); font-weight: 700; margin-bottom: .4rem;
+}
+.landing-title {
+    font-size: 2.6rem; line-height: 1; font-weight: 900; letter-spacing: .08em;
+    white-space: nowrap;      /* never break "ROCK|CONNECT" across two lines */
     margin-bottom: 1rem;
 }
+.landing-title a, .landing-title a:hover { color: inherit; text-decoration: none; }
+.landing-title a span { color: var(--amber); }
 
-.author { font-weight: 600; color: #050505; }
-.author:hover { text-decoration: underline; color: #050505; }
+/* ---------- cards ---------- */
+.rc-card {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    box-shadow: 4px 4px 0 rgba(255, 176, 0, .14);
+    margin-bottom: 1.25rem;
+}
+/* the landing card gets the big solid amber shadow (declared after .rc-card so it wins) */
+.landing-card.rc-card { box-shadow: 8px 8px 0 var(--amber); }
 
-/* ---------- avatars (colour picked by user id % 6) ---------- */
+.card-header {
+    background: var(--panel-2); border-bottom: 1px solid var(--line);
+    text-transform: uppercase; letter-spacing: .08em; font-weight: 700;
+}
+.author { font-weight: 700; color: var(--text); letter-spacing: .02em; }
+.author:hover { color: var(--amber); text-decoration: none; }
+
+/* ---------- forms ---------- */
+.form-group label {
+    text-transform: uppercase; letter-spacing: .08em; font-size: .8rem;
+    font-weight: 500; color: var(--muted); margin-bottom: .25rem;
+}
+.form-control {
+    background: var(--input); border: 1px solid var(--line); color: var(--text);
+    border-radius: 2px; font-family: var(--font);
+}
+.form-control:focus {
+    background: var(--input); color: var(--text); border-color: var(--amber);
+    box-shadow: 0 0 0 .15rem rgba(255, 176, 0, .25);
+}
+.form-control::placeholder { color: #6f6c64; }
+
+/* ---------- buttons ---------- */
+.btn {
+    border-radius: 2px; text-transform: uppercase; letter-spacing: .08em;
+    font-weight: 700; font-family: var(--font);
+}
+.btn-primary { background: var(--amber); border-color: var(--amber); color: #111; }
+.btn-primary:hover, .btn-primary:focus, .btn-primary:active {
+    background: var(--amber-hi) !important; border-color: var(--amber-hi) !important; color: #111 !important;
+}
+.btn-primary:focus { box-shadow: 0 0 0 .2rem rgba(255, 176, 0, .35); }
+.btn-primary:disabled { background: #7a5a10; border-color: #7a5a10; color: #222; }
+.btn-outline-primary { color: var(--amber); border-color: var(--amber); }
+.btn-outline-primary:hover { background: var(--amber); border-color: var(--amber); color: #111; }
+.btn-outline-light { color: var(--text); border-color: #555; }
+.btn-outline-light:hover { background: var(--panel-2); border-color: var(--amber); color: var(--amber); }
+.btn-ghost { background: transparent; border: 1px solid transparent; color: var(--muted); }
+.btn-ghost:hover { background: var(--panel-2); color: var(--text); }
+.btn-link { color: var(--muted); text-transform: none; letter-spacing: 0; }
+.btn-link:hover { color: var(--amber); text-decoration: none; }
+
+.badge-danger { background: var(--danger); }
+.badge-primary { background: var(--amber); color: #111; }
+
+/* ---------- alerts ---------- */
+.alert {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-left-width: 4px; border-radius: 2px;
+}
+.alert-success { border-left-color: #4cc38a; }
+.alert-danger  { border-left-color: var(--danger); }
+.alert-warning { border-left-color: var(--amber); }
+.alert-info    { border-left-color: #48cae4; }
+
+/* ---------- lists (people, chats) ---------- */
+.list-group-item { background: transparent; border-color: var(--line); color: var(--text); }
+.list-group-item-action:hover, .list-group-item-action:focus { background: var(--panel-2); color: var(--text); }
+.chat-list .active-chat { background: var(--panel-2); box-shadow: inset 4px 0 0 var(--amber); }
+.unread-preview { color: var(--text); }
+
+/* ---------- avatars: guitar-pick shaped, colour picked by user id % 6 ---------- */
 .avatar {
     display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
-    width: 40px; height: 40px; border-radius: 50%;
-    color: #fff; font-weight: 700; font-size: 1.1rem;
+    width: 40px; height: 44px;
+    border-radius: 50% 50% 50% 50% / 38% 38% 62% 62%;
+    font-weight: 900; font-size: 1.1rem; color: #111;
 }
-.avatar.sm { width: 32px; height: 32px; font-size: .9rem; }
-.avatar.lg { width: 84px; height: 84px; font-size: 2.4rem; }
-.av0 { background: #1877f2; }
-.av1 { background: #e4405f; }
-.av2 { background: #42b72a; }
-.av3 { background: #f7b928; color: #333; }
-.av4 { background: #8e44ad; }
-.av5 { background: #e67e22; }
+.avatar.sm { width: 30px; height: 33px; font-size: .9rem; }
+.avatar.lg { width: 84px; height: 92px; font-size: 2.4rem; }
+.av0 { background: #ffb000; }
+.av1 { background: #ff5d2e; }
+.av2 { background: #c1121f; color: #fff; }
+.av3 { background: #2ec4b6; }
+.av4 { background: #b5e048; }
+.av5 { background: #48cae4; }
 
 /* ---------- composer + posts ---------- */
-.composer-text { border-radius: 20px; background: #f0f2f5; border: 0; resize: none; }
+.composer-text { resize: none; }
 .photo-pick { cursor: pointer; }
+.photo-label { color: var(--amber); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 
-.post-body { white-space: pre-wrap; word-wrap: break-word; margin-bottom: .5rem; }
-.post-image { width: 100%; max-height: 520px; object-fit: cover; background: #000; }
+.post-body { white-space: pre-wrap; word-wrap: break-word; margin-bottom: .5rem; font-size: 1.05rem; }
+.post-image {
+    width: 100%; max-height: 520px; object-fit: cover; background: #000;
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+}
 
-.action-btn { background: transparent; border: 0; color: #65676b; font-weight: 600; }
-.action-btn:hover { background: #f0f2f5; }
-.action-btn.liked { color: #1877f2; }
+.action-btn { font-size: .9rem; white-space: nowrap; }
+.action-btn.liked { color: var(--amber); }
 
-.comment-bubble { background: #f0f2f5; border-radius: 16px; padding: .35rem .8rem; display: inline-block; }
-.comment-bubble .post-body { display: block; margin: 0; }
-.comment-input { border-radius: 16px; background: #f0f2f5; border: 0; }
+.comment-bubble {
+    background: var(--panel-2); border-left: 3px solid var(--amber);
+    border-radius: 2px; padding: .35rem .8rem; display: inline-block;
+}
+.comment-bubble .post-body { display: block; margin: 0; font-size: 1rem; }
+.comment-input { border-radius: 2px; }
 
-/* ---------- chat (Messenger style) ---------- */
+/* ---------- chat ---------- */
 .chat-pane { display: flex; flex-direction: column; height: 70vh; min-height: 420px; }
 .chat-list { max-height: 70vh; overflow-y: auto; }
-.chat-list .active-chat { background: #e7f3ff; }
 
 .chat-messages {
     flex: 1; overflow-y: auto; padding: 1rem;
     display: flex; flex-direction: column;
 }
-.message { max-width: 75%; margin-bottom: .35rem; padding: .45rem .85rem; border-radius: 18px; }
+.message { max-width: 75%; margin-bottom: .4rem; padding: .45rem .85rem; border-radius: 2px; }
 .message .body { white-space: pre-wrap; word-wrap: break-word; }
-.message .meta { font-size: .68rem; opacity: .65; text-align: right; }
-.message.mine { align-self: flex-end; background: #0084ff; color: #fff; border-bottom-right-radius: 4px; }
-.message.theirs { align-self: flex-start; background: #e4e6eb; color: #050505; border-bottom-left-radius: 4px; }
+.message .meta { font-size: .7rem; opacity: .65; text-align: right; letter-spacing: .04em; }
+.message.mine { align-self: flex-end; background: var(--amber); color: #111; }
+.message.theirs { align-self: flex-start; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); }
 
-.chat-form { border-top: 1px solid #e4e6eb; }
-.chat-form textarea { border-radius: 20px; resize: none; max-height: 120px; }
+.chat-form { border-top: 1px solid var(--line); }
+.chat-form textarea { resize: none; max-height: 120px; }
 
+/* ---------- misc ---------- */
+.footer-note { text-transform: uppercase; letter-spacing: .15em; font-size: .72rem; }
+
+@media (max-width: 575px) {
+    .landing-title { font-size: 1.9rem; letter-spacing: .05em; }
+}
 @media (max-width: 767px) {
     .chat-pane { height: 60vh; }
     .message { max-width: 90%; }

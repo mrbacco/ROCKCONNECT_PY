@@ -14,6 +14,7 @@ USER = dict(username="bacco", name="Andrea B", email="a@b.com",
 @pytest.fixture
 def client(tmp_path):
     app = create_app({"TESTING": True,
+                      "INSTANCE_PATH": str(tmp_path / "instance"),  # never the real instance folder
                       "DATABASE_URL": "sqlite:///" + str(tmp_path / "t.sqlite"),
                       "UPLOAD_DIR": str(tmp_path / "uploads")})
     return app.test_client()
@@ -167,7 +168,8 @@ def test_message_html_escaped(client):
 def test_database_url_selects_backend(tmp_path):
     from rockconnect.db import get_engine
     url = "sqlite:///" + str(tmp_path / "other.sqlite")
-    app = create_app({"TESTING": True, "DATABASE_URL": url})
+    app = create_app({"TESTING": True, "DATABASE_URL": url,
+                      "INSTANCE_PATH": str(tmp_path / "instance")})
     with app.app_context():
         assert get_engine().url.get_backend_name() == "sqlite"
         assert get_engine().url.database.endswith("other.sqlite")

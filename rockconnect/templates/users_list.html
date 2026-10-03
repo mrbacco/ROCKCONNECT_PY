@@ -9,7 +9,7 @@
 {% block content %}
 <div class="row">
   <div class="col-lg-6 offset-lg-3 col-md-8 offset-md-2">
-    <div class="card fb-card">
+    <div class="card rc-card">
       <div class="card-body d-flex align-items-center">
         {{ avatar(user['username'], user['id'], 'lg') }}
         <div class="ml-3 flex-grow-1">
@@ -22,7 +22,7 @@
           <button class="btn btn-primary" type="submit">&#128172; Message</button>
         </form>
         {% elif g.user %}
-        <a class="btn btn-light" href="{{ url_for('views.edit') }}">Edit profile</a>
+        <a class="btn btn-ghost" href="{{ url_for('views.edit') }}">Edit profile</a>
         {% endif %}
       </div>
       <div class="card-body border-top">
@@ -36,14 +36,14 @@
       {% for p in posts %}
         {% include "_post.html" %}
       {% else %}
-        <div class="card fb-card"><div class="card-body text-center text-muted">No posts yet.</div></div>
+        <div class="card rc-card"><div class="card-body text-center text-muted">No posts yet.</div></div>
       {% endfor %}
       {% if has_more %}
-      <a class="btn btn-light btn-block mb-3"
+      <a class="btn btn-ghost btn-block mb-3"
          href="{{ url_for('views.profile', user_id=user['id'], before=next_before) }}">Older posts</a>
       {% endif %}
     {% else %}
-      <div class="card fb-card"><div class="card-body text-center">
+      <div class="card rc-card"><div class="card-body text-center">
         <a href="{{ url_for('auth.signin') }}">Sign in</a> or <a href="{{ url_for('auth.signup') }}">sign up</a>
         to see {{ user['username'] }}'s posts.
       </div></div>
