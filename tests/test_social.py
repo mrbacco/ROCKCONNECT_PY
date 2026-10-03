@@ -8,6 +8,14 @@ import re
 # reuse the helpers and the `client` fixture from test_app.py
 from test_app import client, csrf, signin, signup, start, two_users  # noqa: F401
 
+
+
+def register(client, **over):
+    """Sign up AND sign in (registering alone no longer starts a session)."""
+    signup(client, **over)
+    return signin(client, over.get("username", "bacco"))
+
+
 PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 64
 FETCH = {"X-Requested-With": "fetch"}
 
@@ -30,15 +38,16 @@ def send_json(client, conv_id, body):
 
 
 # ------------------------------------------------------------------ feed
-def test_signup_signs_in_and_lands_on_feed(client):
-    page = signup(client).data
-    assert b"Welcome to rockconnect" in page and b"listening to" in page
+def test_register_then_sign_in_lands_on_feed(client):
+    assert b"please sign in" in signup(client).data       # registering only creates the account
+    page = signin(client).data                            # signing in starts the session
+    assert b"Signed in as bacco" in page and b"listening to" in page
 
 
 def test_feed_requires_login_but_profile_stays_public(client):
     assert client.get("/feed").status_code == 302
     assert client.post("/posts", data={"_csrf": csrf(client), "body": "x"}).status_code == 302
-    signup(client)
+    register(client)
     post(client, "my first post")
     anon = client.application.test_client()
     page = anon.get("/users_list/1").data
@@ -46,7 +55,7 @@ def test_feed_requires_login_but_profile_stays_public(client):
 
 
 def test_create_post_shows_on_feed_and_wall_and_escapes_html(client):
-    signup(client)
+    register(client)
     assert b"Posted!" in post(client, "hello <b>world</b> & <script>x</script>").data
     for url in ("/feed", "/users_list/1"):
         html = client.get(url).data
@@ -54,7 +63,7 @@ def test_create_post_shows_on_feed_and_wall_and_escapes_html(client):
 
 
 def test_empty_and_too_long_posts_rejected(client):
-    signup(client)
+    register(client)
     assert b"Write something or add a photo" in post(client, "   ").data
     assert b"Post too long" in post(client, "x" * 5001).data
 
@@ -66,7 +75,7 @@ def test_post_visible_to_other_members(client):
 
 
 def test_photo_upload_is_validated_and_served_to_members_only(client):
-    signup(client)
+    register(client)
     html = post(client, "pic", image=(io.BytesIO(PNG), "../../evil name.png")).data
     name = re.search(rb"/uploads/([0-9a-f]{32}\.png)", html).group(1).decode()
     assert b"evil" not in html                       # the uploaded file name is discarded
@@ -110,20 +119,20 @@ def test_comment_deleted_by_author_or_post_owner_only(client):
     post(bacco, "p")
     act(rita, "/posts/1/comments", body="from rita")
     third = client.application.test_client()
-    signup(third, username="eve", name="Eve", email="e@b.com")
+    register(third, username="eve", name="Eve", email="e@b.com")
     assert third.post("/comments/1/delete", data={"_csrf": csrf(third, "/feed")}).status_code == 403
     act(bacco, "/comments/1/delete")  # the post's owner can moderate
     assert b"from rita" not in bacco.get("/feed").data
 
 
 def test_open_redirect_blocked_after_post(client):
-    signup(client)
+    register(client)
     r = client.post("/posts", data={"body": "x", "next": "//evil.example", "_csrf": csrf(client, "/feed")})
     assert r.status_code == 302 and "evil.example" not in r.headers["Location"]
 
 
 def test_feed_pagination(client):
-    signup(client)
+    register(client)
     for i in range(23):
         post(client, "post-%02d" % i)
     page1 = client.get("/feed").data
@@ -155,7 +164,7 @@ def test_poll_is_private(client):
     bacco, _ = two_users(client)
     start(bacco, 2)
     eve = client.application.test_client()
-    signup(eve, username="eve", name="Eve", email="e@b.com")
+    register(eve, username="eve", name="Eve", email="e@b.com")
     assert eve.get("/conversations/1/messages?after=0").status_code == 404
     assert client.application.test_client().get("/conversations/1/messages").status_code == 302
 
@@ -217,7 +226,7 @@ def test_signin_and_signup_pages_link_to_each_other(client):
 
 
 def test_members_get_the_menu_and_skip_the_landing_page(client):
-    signup(client)
+    register(client)
     r = client.get("/")
     assert r.status_code == 302 and r.headers["Location"].endswith("/feed")
     assert client.get("/home").status_code == 302
@@ -227,7 +236,7 @@ def test_members_get_the_menu_and_skip_the_landing_page(client):
 
 def test_people_list_needs_login_and_signout_returns_to_menu_less_landing(client):
     assert client.get("/people").status_code == 302
-    signup(client)
+    register(client)
     out = client.post("/users/signout", data={"_csrf": csrf(client, "/feed")}, follow_redirects=True)
     assert b"signed out" in out.data and b"<nav" not in out.data
     assert client.get("/feed").status_code == 302

@@ -53,6 +53,15 @@ messages = Table(
     Column("created_at", String(19), nullable=False),  # UTC "YYYY-MM-DD HH:MM:SS"
 )
 
+# --- login sessions (server side): the browser only holds a random token, we hold the expiry ---
+sessions = Table(
+    "sessions", metadata,
+    Column("token_hash", String(64), primary_key=True),   # sha256 of the token: a leaked table is useless
+    Column("user_id", Integer, ForeignKey("users.id"), nullable=False, index=True),
+    Column("created_at", String(19), nullable=False),
+    Column("expires_at", String(19), nullable=False, index=True),  # UTC "YYYY-MM-DD HH:MM:SS"
+)
+
 # --- feed: posts, comments, likes -------------------------------------------------------
 posts = Table(
     "posts", metadata,

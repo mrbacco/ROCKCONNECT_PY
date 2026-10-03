@@ -47,6 +47,10 @@
         <a class="nav-link text-white d-flex align-items-center" href="{{ url_for('views.profile', user_id=g.user['id']) }}">
           {{ avatar(g.user['username'], g.user['id'], 'sm') }}<span class="ml-2">{{ g.user['name'].split()[0] }}</span>
         </a>
+        {# time left in this login session; main.js counts it down and sends you to sign in at 0 #}
+        <span id="session-timer" class="navbar-text session-timer mr-2"
+              data-seconds-left="{{ session_seconds_left }}" data-login-url="{{ url_for('auth.signin') }}"
+              title="Your session ends automatically, then you sign in again">session <b>...</b></span>
         <a class="nav-link text-white" href="{{ url_for('views.edit') }}">settings</a>
         <form class="form-inline" method="POST" action="{{ url_for('auth.signout') }}">
           <input type="hidden" name="_csrf" value="{{ csrf_token }}">

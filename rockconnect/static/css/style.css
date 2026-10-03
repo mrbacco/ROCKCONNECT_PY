@@ -74,6 +74,12 @@ hr { border-top: 1px solid var(--line); }
 }
 .navbar-rc .nav-link:hover, .navbar-rc .nav-link.text-white:hover { color: var(--amber) !important; }
 
+/* session countdown in the menu bar; turns amber and pulses in the last 5 minutes */
+.session-timer { color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-size: .78rem; }
+.session-timer b { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.session-timer.ending b { color: var(--amber); animation: rc-pulse 1.2s ease-in-out infinite; }
+@keyframes rc-pulse { 50% { opacity: .35; } }
+
 /* ---------- landing / sign in / sign up ---------- */
 .landing { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; }
 .landing-card {

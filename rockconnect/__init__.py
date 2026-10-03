@@ -5,6 +5,7 @@
 import logging
 import os
 import secrets
+from datetime import timedelta
 
 from flask import (Flask, abort, flash, redirect, request, session,
                    url_for)
@@ -41,7 +42,13 @@ def create_app(test_config=None):
         wz.addFilter(_QuietPollingFilter())
     app.config.from_mapping(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev-only-change-me"),
-        PERMANENT_SESSION_LIFETIME=24 * 3600,  # sessions last one day
+        # How long a login lasts. After this the user must sign in again. Change it with the
+        # SESSION_MINUTES environment variable (default 60 minutes).
+        SESSION_LIFETIME_MINUTES=int(os.environ.get("SESSION_MINUTES", 60)),
+        SESSION_COOKIE_HTTPONLY=True,    # JavaScript cannot read the cookie
+        SESSION_COOKIE_SAMESITE="Lax",   # not sent on cross-site POSTs
+        # set SESSION_COOKIE_SECURE=1 when the site is served over https
+        SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE") == "1",
         # let browsers cache static files (css, background image) for an hour instead of
         # re-validating on every page load, which is what produced the flood of "304 Not Modified"
         SEND_FILE_MAX_AGE_DEFAULT=3600,
@@ -53,6 +60,12 @@ def create_app(test_config=None):
     if test_config:
         app.config.update(test_config)
         bac_log("app", "test_config applied: keys=%s" % sorted(test_config))
+    # The SERVER decides when a login ends (session_store.py). The cookie is kept a day longer on
+    # purpose: if it vanished at the same moment, the server could not tell "your session expired"
+    # from "you never signed in" and could not show the right message.
+    app.config["PERMANENT_SESSION_LIFETIME"] = (
+        timedelta(minutes=app.config["SESSION_LIFETIME_MINUTES"]) + timedelta(days=1))
+    bac_log("app", "login sessions last %s minute(s)" % app.config["SESSION_LIFETIME_MINUTES"])
     if app.config["SECRET_KEY"] == "dev-only-change-me":
         # warn loudly: the default key must not be used outside local development
         bac_log("app", "WARNING: using the default SECRET_KEY, set SECRET_KEY in the environment")

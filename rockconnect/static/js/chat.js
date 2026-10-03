@@ -67,7 +67,12 @@
     if (document.hidden) { return; }   // do not hammer the server from a background tab
     fetch(chat.getAttribute("data-poll-url") + "?after=" + lastId,
           { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } })
-      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (r) {
+        if (r.status === 401) {          // session expired: back to the sign-in page
+          return r.json().then(function (d) { window.rcSessionExpired(d.login_url); return null; });
+        }
+        return r.ok ? r.json() : null;
+      })
       .then(function (data) {
         if (!data || !data.messages.length) { return; }
         var stick = nearBottom();      // only auto-scroll if the reader is already at the bottom
@@ -89,9 +94,14 @@
       headers: { "X-Requested-With": "fetch" }
     })
       .then(function (r) {
-        return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, data: d }; });
+        return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, data: d }; });
       })
       .then(function (res) {
+        if (res.status === 401) {        // session expired while typing: explain, then go to sign in
+          errorEl.textContent = "Your session has expired. Taking you to the sign-in page...";
+          setTimeout(function () { window.rcSessionExpired(res.data.login_url); }, 1500);
+          return;
+        }
         if (!res.ok) { throw new Error(res.data.error || "Could not send, please try again."); }
         addMessage(res.data.message);
         input.value = "";

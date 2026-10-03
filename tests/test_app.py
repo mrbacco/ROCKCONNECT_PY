@@ -42,7 +42,8 @@ def test_pages_render(client):
 
 
 def test_signup_lists_user_and_hashes_password(client):
-    assert b"Account created" in signup(client).data
+    assert b"account is ready" in signup(client).data
+    signin(client)  # the people list needs a session
     assert b"bacco" in client.get("/people").data
     with client.application.app_context():
         from rockconnect.db import execute
@@ -58,7 +59,7 @@ def test_signup_rejects_duplicates_and_missing_fields(client):
 
 def test_signin_good_and_bad_password(client):
     signup(client)
-    assert b"Successfully logged in" in signin(client).data
+    assert b"Signed in as bacco" in signin(client).data
     bad = signin(client.application.test_client(), password="wrong")
     assert bad.status_code == 401 and b"Invalid credentials" in bad.data
 
@@ -71,6 +72,7 @@ def test_profile_and_404(client):
 
 def test_search(client):
     signup(client)
+    signin(client)
     assert b"bacco" in client.get("/people?q=bac").data
     assert b"No users found" in client.get("/people?q=zzz").data
 
