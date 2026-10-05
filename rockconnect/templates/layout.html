@@ -1,29 +1,31 @@
 {#
   File: layout.html
   Author: mrbacco04@gmail.com
-  Date: 2026-10-02
+  Date: 2026-10-05
 #}
-{% from "_macros.html" import avatar %}
+{% from "_macros.html" import avatar, brand with context %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}rockconnect{% endblock %}</title>
+  <title>{% block title %}{{ site.name }}{% endblock %}</title>
   <meta name="theme-color" content="#0d0d0f">
-  {# Roboto Condensed (the maintained successor of "Roboto Narrow") from Google Fonts #}
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@300;400;500;700;900&display=swap">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+  <link rel="icon" type="image/svg+xml" href="{{ asset('images/favicon.svg') }}">
+  <meta name="description" content="{{ site.tagline }}">
+  {# Everything is served from this site (no CDN): fast, private for visitors and compatible with the strict security policy #}
+  <link rel="stylesheet" href="{{ asset('vendor/fonts.css') }}">
+  <link rel="stylesheet" href="{{ asset('vendor/bootstrap.min.css') }}">
   <link rel="stylesheet" href="{{ asset('css/style.css') }}">
+  {# the accent colour of this installation (ACCENT_COLOR), overrides the default amber in style.css #}
+  <link rel="stylesheet" href="{{ url_for('system.theme') }}">
 </head>
 <body class="{% block body_class %}bg-stage{% endblock %}">
   {# the menu bar only exists for signed-in members; visitors see just the page (landing, sign in, sign up) #}
   {% if g.user %}
   <header>
-    <nav class="navbar navbar-expand-md navbar-dark navbar-rc sticky-top">
-      <a class="navbar-brand brand" href="{{ url_for('feed.index') }}">rock<span>connect</span></a>
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-rc sticky-top">
+      <a class="navbar-brand brand" href="{{ url_for('feed.index') }}">{{ brand() }}</a>
       <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarCollapse"
               aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
@@ -31,27 +33,27 @@
       <div class="collapse navbar-collapse" id="navbarCollapse">
         <ul class="navbar-nav mr-auto">
           <li class="nav-item"><a class="nav-link" href="{{ url_for('feed.index') }}">feed</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('feed.gigs') }}">gigs</a></li>
           <li class="nav-item">
             <a class="nav-link" href="{{ url_for('conversations.inbox') }}">messages
-              <span id="unread-badge" class="badge badge-danger" data-url="{{ url_for('conversations.unread') }}"
-                    {% if not unread_count %}style="display:none"{% endif %}>{{ unread_count }}</span>
+              <span id="unread-badge" class="badge badge-danger {% if not unread_count %}d-none{% endif %}"
+                    data-url="{{ url_for('conversations.unread') }}">{{ unread_count }}</span>
             </a>
           </li>
           <li class="nav-item"><a class="nav-link" href="{{ url_for('views.index') }}">people</a></li>
+          {% if g.user['role'] == 'admin' %}
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.dashboard') }}">admin</a></li>
+          {% endif %}
         </ul>
-        <form class="form-inline mt-2 mt-md-0 mr-md-2" method="GET" action="{{ url_for('views.index') }}">
-          <input class="form-control form-control-sm mr-sm-2" type="text" name="q" placeholder="Search people"
+        <form class="form-inline mt-2 mt-lg-0 mr-lg-2" method="GET" action="{{ url_for('views.index') }}">
+          <input class="form-control form-control-sm nav-search mr-sm-2" type="text" name="q" placeholder="Search people"
                  aria-label="Search" value="{{ request.args.get('q', '') }}">
           <button class="btn btn-primary btn-sm my-2 my-sm-0" type="submit">Search</button>
         </form>
         <a class="nav-link text-white d-flex align-items-center" href="{{ url_for('views.profile', user_id=g.user['id']) }}">
-          {{ avatar(g.user['username'], g.user['id'], 'sm') }}<span class="ml-2">{{ g.user['name'].split()[0] }}</span>
+          {{ avatar(g.user['username'], g.user['id'], 'sm') }}<span class="ml-2 nav-name">{{ g.user['name'].split()[0] if g.user['kind'] == 'fan' else g.user['name'] }}</span>
         </a>
-        {# time left in this login session; main.js counts it down and sends you to sign in at 0 #}
-        <span id="session-timer" class="navbar-text session-timer mr-2"
-              data-seconds-left="{{ session_seconds_left }}" data-login-url="{{ url_for('auth.signin') }}"
-              title="Your session ends automatically, then you sign in again">session <b>...</b></span>
-        <a class="nav-link text-white" href="{{ url_for('views.edit') }}">settings</a>
+        <a class="nav-link text-white" href="{{ url_for('account.settings') }}">account</a>
         <form class="form-inline" method="POST" action="{{ url_for('auth.signout') }}">
           <input type="hidden" name="_csrf" value="{{ csrf_token }}">
           <button class="btn btn-outline-light btn-sm" type="submit">sign out</button>
@@ -68,16 +70,27 @@
       {% endfor %}
     {% endwith %}
 
+    {% if g.user and site.verification_required and not g.user['email_verified'] %}
+    <div class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap" role="alert">
+      <span>Please confirm your email address ({{ g.user['email'] }}) to post, comment and message.</span>
+      <form method="POST" action="{{ url_for('auth.resend_verification') }}" class="ml-2">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+        <button class="btn btn-outline-primary btn-sm" type="submit">Send the link again</button>
+      </form>
+    </div>
+    {% endif %}
+
     {% block content %}{% endblock %}
 
     {% block footer %}
     <br><hr>
-    <footer><p class="text-muted footer-note">rockconnect &middot; Copyright &copy; mrbacco 2019</p></footer>
+    <footer>{% include "_legal_links.html" %}</footer>
     {% endblock %}
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="{{ asset('vendor/jquery.min.js') }}"></script>
+  <script src="{{ asset('vendor/bootstrap.bundle.min.js') }}"></script>
   <script src="{{ asset('js/main.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>

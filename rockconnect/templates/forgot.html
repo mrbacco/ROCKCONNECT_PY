@@ -1,0 +1,30 @@
+{#
+  File: forgot.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-05
+#}
+{% extends "layout.html" %}
+{% from "_macros.html" import brand with context %}
+{% block title %}Forgot password - {{ site.name }}{% endblock %}
+{% block body_class %}bkimg{% endblock %}
+{% block container_class %}container landing{% endblock %}
+{% block content %}
+<div class="landing-card card rc-card">
+  <div class="card-body p-4">
+    <h1 class="landing-title text-center"><a class="brand" href="{{ url_for('views.home') }}">{{ brand() }}</a></h1>
+    <h2 class="h4 text-center mb-3">Forgot your password?</h2>
+    <p class="text-muted">Type the email address of your account and we will send you a link to choose a new password.</p>
+    <form method="POST" action="{{ url_for('auth.forgot') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input id="email" class="form-control" type="email" name="email" placeholder="name@email.com" required autofocus>
+      </div>
+      <button class="btn btn-primary btn-block" type="submit">Send the link</button>
+    </form>
+    <hr>
+    <p class="text-center mb-0"><a href="{{ url_for('auth.signin') }}">Back to sign in</a></p>
+  </div>
+</div>
+{% endblock %}
+{% block footer %}{% include "_legal_links.html" %}{% endblock %}

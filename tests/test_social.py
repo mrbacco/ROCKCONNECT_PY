@@ -5,8 +5,8 @@
 import io
 import re
 
-# reuse the helpers and the `client` fixture from test_app.py
-from test_app import client, csrf, signin, signup, start, two_users  # noqa: F401
+# reuse the helpers from test_app.py (the `client` fixture comes from conftest.py)
+from test_app import csrf, signin, signup, start, two_users
 
 
 
@@ -132,6 +132,7 @@ def test_open_redirect_blocked_after_post(client):
 
 
 def test_feed_pagination(client):
+    client.application.config["RATE_LIMITS_ENABLED"] = False  # this test posts 23 times in a row
     register(client)
     for i in range(23):
         post(client, "post-%02d" % i)

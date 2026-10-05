@@ -1,20 +1,22 @@
 # File: feed.py
 # Author: mrbacco04@gmail.com
-# Date: 2026-10-02
-"""Facebook-style feed: users post text and photos, like and comment on each other's posts.
+# Date: 2026-10-05
+"""The community feed: members post text, photos and gig announcements, like and comment.
 
-Everything here needs a signed-in user. All members see all posts (there is no friends list yet).
+Everything here needs a signed-in user. All members see all posts (there is no friends list yet),
+except posts of suspended accounts and of members who blocked you or whom you blocked.
 """
-import os
 import secrets
+from datetime import datetime, timedelta, timezone
 
-from flask import (Blueprint, abort, current_app, flash, g, redirect,
-                   render_template, request, send_from_directory, url_for)
+from flask import (Blueprint, abort, flash, g, redirect, render_template, request,
+                   url_for)
 from sqlalchemy.exc import IntegrityError
 
-from .auth import login_required
+from . import geo, modlog, ratelimit, storage
+from .auth import login_required, verified_required
 from .baclog import bac_log
-from .db import commit, comments, execute, insert, likes, posts, rollback
+from .db import commit, comments, execute, insert, posts, rollback
 from .util import detect_image_ext, now_str, safe_next
 
 bp = Blueprint("feed", __name__)
@@ -23,6 +25,39 @@ PAGE_SIZE = 20              # posts per page
 MAX_POST_LENGTH = 5000
 MAX_COMMENT_LENGTH = 1000
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
+GIG_KINDS = ("band", "venue")  # only they can announce gigs
+GIG_GRACE_HOURS = 12           # a gig stays on the board until the morning after it starts
+
+# posts/comments of suspended members, and of anyone who blocked me or whom I blocked, are never shown
+VISIBLE_AUTHOR = (
+    "u.status = 'active'"
+    " AND u.id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = :me)"
+    " AND u.id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = :me)"
+)
+
+POST_SELECT = (
+    "SELECT p.id, p.body, p.image_filename, p.created_at, p.event_at, p.event_place, p.latitude, p.longitude,"
+    " u.id AS author_id, u.username AS author, u.name AS author_name, u.kind AS author_kind,"
+    " (SELECT count(*) FROM likes l WHERE l.post_id = p.id) AS like_count,"
+    " (SELECT count(*) FROM likes l WHERE l.post_id = p.id AND l.user_id = :me) AS liked_by_me"
+    " FROM posts p JOIN users u ON u.id = p.user_id WHERE " + VISIBLE_AUTHOR
+)
+
+
+def _attach_comments(rows):
+    """One query for the comments of every post on the page (not one query per post)."""
+    comments_by_post = {r["id"]: [] for r in rows}
+    if rows:
+        id_params = {"i%d" % n: r["id"] for n, r in enumerate(rows)}
+        marks = ", ".join(":" + k for k in id_params)
+        for c in execute(
+            "SELECT c.id, c.post_id, c.body, c.created_at, c.user_id, u.username AS author"
+            " FROM comments c JOIN users u ON u.id = c.user_id"
+            " WHERE c.post_id IN (" + marks + ") AND " + VISIBLE_AUTHOR + " ORDER BY c.id",
+            me=g.user["id"], **id_params
+        ).mappings():
+            comments_by_post[c["post_id"]].append(c)
+    return comments_by_post
 
 
 def load_posts(user_id=None, before=None):
@@ -31,39 +66,29 @@ def load_posts(user_id=None, before=None):
     `before` is the id of the last post of the previous page (keyset pagination: fast and stable
     even while new posts arrive). Returns (posts, comments_by_post_id, has_more).
     """
-    where, params = [], {"me": g.user["id"], "lim": PAGE_SIZE + 1}  # +1 row tells us if there is more
+    params = {"me": g.user["id"], "lim": PAGE_SIZE + 1}  # +1 row tells us if there is more
+    sql = POST_SELECT
     if user_id is not None:
-        where.append("p.user_id = :uid")
+        sql += " AND p.user_id = :uid"
         params["uid"] = user_id
     if before:
-        where.append("p.id < :before")
+        sql += " AND p.id < :before"
         params["before"] = before
-    rows = execute(
-        "SELECT p.id, p.body, p.image_filename, p.created_at,"
-        " u.id AS author_id, u.username AS author, u.name AS author_name,"
-        " (SELECT count(*) FROM likes l WHERE l.post_id = p.id) AS like_count,"
-        " (SELECT count(*) FROM likes l WHERE l.post_id = p.id AND l.user_id = :me) AS liked_by_me"
-        " FROM posts p JOIN users u ON u.id = p.user_id"
-        + (" WHERE " + " AND ".join(where) if where else "") +
-        " ORDER BY p.id DESC LIMIT :lim", **params
-    ).mappings().fetchall()
+    rows = execute(sql + " ORDER BY p.id DESC LIMIT :lim", **params).mappings().fetchall()
     has_more = len(rows) > PAGE_SIZE
     rows = rows[:PAGE_SIZE]
-
-    # one query for the comments of every post on the page (not one query per post)
-    comments_by_post = {r["id"]: [] for r in rows}
-    if rows:
-        id_params = {"i%d" % n: r["id"] for n, r in enumerate(rows)}
-        marks = ", ".join(":" + k for k in id_params)
-        for c in execute(
-            "SELECT c.id, c.post_id, c.body, c.created_at, c.user_id, u.username AS author"
-            " FROM comments c JOIN users u ON u.id = c.user_id"
-            " WHERE c.post_id IN (" + marks + ") ORDER BY c.id", **id_params
-        ).mappings():
-            comments_by_post[c["post_id"]].append(c)
     bac_log("feed", "loaded %d post(s) user_id=%s before=%s has_more=%s"
             % (len(rows), user_id, before, has_more))
-    return rows, comments_by_post, has_more
+    return rows, _attach_comments(rows), has_more
+
+
+def load_gigs():
+    """Announced gigs that have not happened yet, soonest first."""
+    since = (datetime.now(timezone.utc) - timedelta(hours=GIG_GRACE_HOURS)).strftime("%Y-%m-%d %H:%M")
+    rows = execute(POST_SELECT + " AND p.event_at IS NOT NULL AND p.event_at >= :since"
+                   " ORDER BY p.event_at, p.id LIMIT 100", me=g.user["id"], since=since).mappings().fetchall()
+    bac_log("feed", "loaded %d upcoming gig(s)" % len(rows))
+    return rows, _attach_comments(rows)
 
 
 def _back(post_id=None):
@@ -72,17 +97,9 @@ def _back(post_id=None):
     return redirect(target + ("#post-%d" % post_id if post_id else ""))
 
 
-def _upload_dir():
-    return current_app.config["UPLOAD_DIR"]
-
-
-def _remove_image(filename):
-    if filename:
-        try:
-            os.remove(os.path.join(_upload_dir(), filename))
-            bac_log("feed", "image file %s deleted" % filename)
-        except OSError:
-            pass  # already gone: nothing to do
+def remove_image(filename):
+    if filename and storage.get().delete(filename):
+        bac_log("feed", "image file %s deleted" % filename)
 
 
 def _get_post_or_404(post_id):
@@ -94,6 +111,37 @@ def _get_post_or_404(post_id):
     return post
 
 
+def delete_post_rows(post):
+    """Remove a post with its likes, comments and photo (used by the author, by admins and on account deletion).
+    Does not commit."""
+    # children first (foreign keys), then the post itself
+    execute("DELETE FROM likes WHERE post_id = :id", id=post["id"])
+    execute("DELETE FROM comments WHERE post_id = :id", id=post["id"])
+    execute("DELETE FROM posts WHERE id = :id", id=post["id"])
+
+
+def _is_admin():
+    return g.user["role"] == "admin"
+
+
+def _gig_position(place):
+    """Where a gig is: the coordinates sent by the 'use my location' button, else a lookup of the place name.
+    (None, None) when neither works; the gig is then simply not part of 'near me' searches."""
+    lat = geo.parse_coord(request.form.get("event_lat"), 90)
+    lon = geo.parse_coord(request.form.get("event_lon"), 180)
+    if lat is not None and lon is not None:
+        return round(lat, 5), round(lon, 5)
+    if place and not ratelimit.blocked("geocode_user", g.user["id"]):
+        ratelimit.hit("geocode_user", g.user["id"])      # lookups go to an outside service: count them
+        try:
+            found = geo.geocode(place)
+        except geo.GeocoderUnavailable:
+            found = None            # the gig is still posted; the poster is told it is not on the map
+        if found:
+            return round(found[0], 5), round(found[1], 5)
+    return None, None
+
+
 @bp.route("/feed")
 @login_required
 def index():
@@ -102,14 +150,48 @@ def index():
                            has_more=has_more, next_before=rows[-1]["id"] if has_more else None)
 
 
+@bp.route("/posts/<int:post_id>")
+@login_required
+def single_post(post_id):
+    """One post on its own page (the link from 'gigs near me' results)."""
+    rows = execute(POST_SELECT + " AND p.id = :pid", me=g.user["id"], pid=post_id).mappings().fetchall()
+    if not rows:
+        abort(404)  # missing, or by someone suspended / who blocked you
+    return render_template("post.html", posts=rows, comments_by_post=_attach_comments(rows))
+
+
+@bp.route("/gigs")
+@login_required
+def gigs():
+    rows, comments_by_post = load_gigs()
+    return render_template("gigs.html", posts=rows, comments_by_post=comments_by_post)
+
+
 @bp.route("/posts", methods=("POST",))
 @login_required
+@verified_required
 def create_post():
+    ratelimit.allow("post_user", g.user["id"])
     body = request.form.get("body", "").strip()
     upload = request.files.get("image")
     has_image = upload is not None and bool(upload.filename)
 
-    if not body and not has_image:
+    # a gig announcement carries a date (and optionally a place); only bands and venues may post them
+    event_at = event_place = event_lat = event_lon = None
+    event_raw = request.form.get("event_at", "").strip()
+    if event_raw:
+        if g.user["kind"] not in GIG_KINDS and not _is_admin():
+            flash("Only bands and venues can announce gigs.", "warning")
+            return _back()
+        try:
+            event_at = datetime.strptime(event_raw, "%Y-%m-%dT%H:%M").strftime("%Y-%m-%d %H:%M")
+        except ValueError:
+            flash("That gig date is not valid.", "danger")
+            return _back()
+        event_place = request.form.get("event_place", "").strip()[:120] or None
+        event_lat, event_lon = _gig_position(event_place)
+
+    if not body and not has_image and not event_at:
         flash("Write something or add a photo first.", "warning")
         return _back()
     if len(body) > MAX_POST_LENGTH:
@@ -130,21 +212,24 @@ def create_post():
             return _back()
         # random name: nobody can guess it and the uploaded name (which could be malicious) is dropped
         filename = secrets.token_hex(16) + ext
-        os.makedirs(_upload_dir(), exist_ok=True)
-        with open(os.path.join(_upload_dir(), filename), "wb") as fh:
-            fh.write(data)
+        storage.get().save(filename, data)
 
     try:
         post_id = insert(posts, user_id=g.user["id"], body=body, image_filename=filename,
-                         created_at=now_str())
+                         created_at=now_str(), event_at=event_at, event_place=event_place,
+                         latitude=event_lat, longitude=event_lon)
         commit()
     except Exception:
         rollback()
-        _remove_image(filename)  # do not leave an orphan file behind
+        remove_image(filename)  # do not leave an orphan file behind
         raise
-    bac_log("feed", "post id=%s created by %r (%d chars, image=%s)"
-            % (post_id, g.user["username"], len(body), bool(filename)))
-    flash("Posted!", "success")
+    bac_log("feed", "post id=%s created by %r (%d chars, image=%s, gig=%s)"
+            % (post_id, g.user["username"], len(body), bool(filename), bool(event_at)))
+    if event_at and event_lat is None:
+        flash("Gig announced! We could not place it on the map, so it will not appear in 'gigs near me' searches. "
+              "Post it from the venue with the location button to fix that.", "warning")
+    else:
+        flash("Gig announced!" if event_at else "Posted!", "success")
     return _back(post_id)
 
 
@@ -152,16 +237,16 @@ def create_post():
 @login_required
 def delete_post(post_id):
     post = _get_post_or_404(post_id)
-    if post["user_id"] != g.user["id"]:
+    own = post["user_id"] == g.user["id"]
+    if not own and not _is_admin():
         bac_log("feed", "user id=%s tried to delete post %s of someone else -> 403"
                 % (g.user["id"], post_id))
         abort(403)
-    # children first (foreign keys), then the post itself
-    execute("DELETE FROM likes WHERE post_id = :id", id=post_id)
-    execute("DELETE FROM comments WHERE post_id = :id", id=post_id)
-    execute("DELETE FROM posts WHERE id = :id", id=post_id)
+    delete_post_rows(post)
+    if not own:
+        modlog.record("remove_post", "post %d" % post_id, "author id=%s" % post["user_id"])
     commit()
-    _remove_image(post["image_filename"])
+    remove_image(post["image_filename"])
     bac_log("feed", "post id=%s deleted by %r" % (post_id, g.user["username"]))
     flash("Post deleted.", "info")
     return _back()
@@ -191,8 +276,10 @@ def toggle_like(post_id):
 
 @bp.route("/posts/<int:post_id>/comments", methods=("POST",))
 @login_required
+@verified_required
 def add_comment(post_id):
     _get_post_or_404(post_id)
+    ratelimit.allow("comment_user", g.user["id"])
     body = request.form.get("body", "").strip()
     if not body:
         flash("Write a comment first.", "warning")
@@ -216,11 +303,13 @@ def delete_comment(comment_id):
     ).mappings().fetchone()
     if row is None:
         abort(404)
-    # the comment's author and the owner of the post may remove it
-    if g.user["id"] not in (row["user_id"], row["post_owner_id"]):
+    # the comment's author and the owner of the post may remove it, and so may an admin
+    if g.user["id"] not in (row["user_id"], row["post_owner_id"]) and not _is_admin():
         bac_log("feed", "user id=%s not allowed to delete comment %s -> 403" % (g.user["id"], comment_id))
         abort(403)
     execute("DELETE FROM comments WHERE id = :id", id=comment_id)
+    if g.user["id"] not in (row["user_id"], row["post_owner_id"]):
+        modlog.record("remove_comment", "comment %d" % comment_id, "author id=%s" % row["user_id"])
     commit()
     bac_log("feed", "comment id=%s deleted by id=%s" % (comment_id, g.user["id"]))
     return _back(row["post_id"])
@@ -229,8 +318,7 @@ def delete_comment(comment_id):
 @bp.route("/uploads/<filename>")
 @login_required
 def uploaded_file(filename):
-    # send_from_directory refuses paths that escape the folder (../ tricks)
-    response = send_from_directory(_upload_dir(), filename, max_age=86400)
+    response = storage.get().response(filename)
     response.cache_control.private = True  # photos are for signed-in members only
     response.cache_control.public = False
     return response

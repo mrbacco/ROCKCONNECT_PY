@@ -1,0 +1,44 @@
+{#
+  File: admin_reports.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-05
+#}
+{% extends "layout.html" %}
+{% block title %}Reports - {{ site.name }}{% endblock %}
+{% block content %}
+{% include "_admin_nav.html" %}
+<p>
+  <a class="btn btn-sm {{ 'btn-primary' if status == 'open' else 'btn-ghost' }}" href="{{ url_for('admin.report_queue') }}">Open</a>
+  <a class="btn btn-sm {{ 'btn-primary' if status == 'closed' else 'btn-ghost' }}" href="{{ url_for('admin.report_queue', status='closed') }}">Closed</a>
+</p>
+{% for r in reports %}
+<div class="card rc-card"><div class="card-body">
+  <div class="d-flex justify-content-between flex-wrap">
+    <div>
+      <strong class="text-uppercase">{{ r['reason'] }}</strong>
+      <span class="text-muted">&middot; {{ r['target_type'] }} #{{ r['target_id'] }}
+        by {% if r['target_username'] %}<a href="{{ url_for('views.profile', user_id=r['target_user_id']) }}">{{ r['target_username'] }}</a>
+        {% if r['target_status'] == 'banned' %}<span class="text-danger">(suspended)</span>{% endif %}{% else %}a deleted account{% endif %}</span>
+    </div>
+    <div class="text-muted small">reported by {{ r['reporter'] }} &middot; {{ r['created_at']|timeago }}</div>
+  </div>
+  {% if r['snapshot'] %}<blockquote class="report-quote post-body mt-2">{{ r['snapshot'][:500] }}</blockquote>{% endif %}
+  {% if r['details'] %}<p class="small mb-2"><span class="text-muted">Reporter says:</span> {{ r['details'] }}</p>{% endif %}
+  {% if status == 'open' %}
+  <form class="d-flex flex-wrap" method="POST" action="{{ url_for('admin.resolve_report', report_id=r['id']) }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <button class="btn btn-ghost btn-sm" name="action" value="dismiss" type="submit">Dismiss</button>
+    {% if r['target_type'] != 'user' %}
+    <button class="btn btn-outline-primary btn-sm ml-2" name="action" value="remove" type="submit">Remove content</button>
+    {% endif %}
+    <button class="btn btn-outline-danger btn-sm ml-2" name="action" value="remove_ban" type="submit">
+      {{ 'Remove and suspend author' if r['target_type'] != 'user' else 'Suspend member' }}</button>
+  </form>
+  {% else %}
+  <p class="small text-muted mb-0">Closed: {{ r['resolution'] }} {{ (r['resolved_at'] or '')|timeago }}</p>
+  {% endif %}
+</div></div>
+{% else %}
+<div class="card rc-card"><div class="card-body text-center text-muted">No {{ status }} reports.</div></div>
+{% endfor %}
+{% endblock %}

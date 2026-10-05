@@ -1,0 +1,5 @@
+# File: requirements-dev.txt
+# Author: mrbacco04@gmail.com
+# Date: 2026-10-05
+-r requirements.txt
+pytest>=8.0

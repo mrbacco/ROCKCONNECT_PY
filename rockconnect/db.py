@@ -1,19 +1,21 @@
 # File: db.py
 # Author: mrbacco04@gmail.com
-# Date: 2026-10-02
+# Date: 2026-10-05
 """Database layer (SQLAlchemy Core): local SQLite by default, remote DB via DATABASE_URL.
 
   local  (default) : sqlite:///<instance>/rockconnect.sqlite
   remote           : postgresql://user:pass@host:5432/dbname   (pip install psycopg2-binary)
                      mysql+pymysql://user:pass@host:3306/dbname (pip install pymysql)
 
-The same code and SQL run on all of them; tables are created automatically on start-up.
+The same code and SQL run on all of them. The schema is managed by Alembic migrations
+(rockconnect/migrations): on start-up the database is brought to the latest version automatically,
+so upgrading to a new release never needs a manual SQL step and never loses data.
 """
 import os
 
 import click
 from flask import current_app, g
-from sqlalchemy import (CheckConstraint, Column, ForeignKey, Integer, MetaData,
+from sqlalchemy import (CheckConstraint, Column, Float, ForeignKey, Integer, MetaData,
                         String, Table, Text, UniqueConstraint, create_engine,
                         event, text)
 from sqlalchemy.engine import URL, make_url
@@ -21,6 +23,10 @@ from sqlalchemy.engine import URL, make_url
 from .baclog import bac_log
 
 metadata = MetaData()
+
+# what kind of member an account is: the product is a community for bands, venues and their fans
+KINDS = ("fan", "band", "venue")
+ROLES = ("member", "admin")
 
 # --- tables (portable types so they work on SQLite, PostgreSQL and MySQL) ---------------
 users = Table(
@@ -31,6 +37,18 @@ users = Table(
     Column("email", String(254), nullable=False, unique=True),
     Column("password", String(100), nullable=False),  # bcrypt hash
     Column("about", Text, nullable=False),
+    Column("kind", String(10), nullable=False, server_default="fan"),       # fan | band | venue
+    Column("role", String(10), nullable=False, server_default="member"),    # member | admin
+    Column("status", String(10), nullable=False, server_default="active"),  # active | banned
+    Column("ban_reason", String(255)),
+    Column("email_verified", Integer, nullable=False, server_default="0"),  # 0 / 1
+    Column("location", String(120)),                                        # city / country
+    Column("website", String(200)),                                         # https link
+    Column("terms_accepted_at", String(19)),                                # UTC, proof of consent
+    Column("created_at", String(19)),                                       # UTC
+    # a band can connect its OWN Bandsintown artist page (their terms: for artists, one app id per artist)
+    Column("bandsintown_artist", String(120)),
+    Column("bandsintown_app_id", String(64)),                               # secret: never shown, logged or exported
 )
 
 # one conversation per pair of users; ids are stored low < high so the pair is unique
@@ -70,6 +88,10 @@ posts = Table(
     Column("body", Text, nullable=False),            # "" is allowed for photo-only posts
     Column("image_filename", String(64)),            # random name inside the uploads folder
     Column("created_at", String(19), nullable=False),
+    Column("event_at", String(16), index=True),      # "YYYY-MM-DD HH:MM" when the post announces a gig
+    Column("event_place", String(120)),              # where the gig is
+    Column("latitude", Float, index=True),           # where the gig is on the map (for "gigs near me")
+    Column("longitude", Float),
 )
 
 comments = Table(
@@ -95,6 +117,122 @@ conversation_reads = Table(
     Column("conversation_id", Integer, ForeignKey("conversations.id"), primary_key=True),
     Column("user_id", Integer, ForeignKey("users.id"), primary_key=True),
     Column("last_read_id", Integer, nullable=False),  # id of the last message seen
+)
+
+# --- e-mail links: confirm an address / reset a password. Only a hash of the token is stored ---
+email_tokens = Table(
+    "email_tokens", metadata,
+    Column("token_hash", String(64), primary_key=True),
+    Column("user_id", Integer, ForeignKey("users.id"), nullable=False, index=True),
+    Column("purpose", String(10), nullable=False),        # verify | reset
+    Column("new_email", String(254)),                     # set when the link confirms a change of address
+    Column("created_at", String(19), nullable=False),
+    Column("expires_at", String(19), nullable=False),
+)
+
+# --- rate limiting: one row per counted event (the key is a hash, see ratelimit.py) ------
+rate_hits = Table(
+    "rate_hits", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("bucket", String(64), nullable=False, index=True),  # hash of "<limit name>:<who>" (not called key: reserved in MySQL)
+    Column("created_at", String(19), nullable=False),
+)
+
+# --- moderation ---------------------------------------------------------------------------
+# a member reports a post, comment or profile; admins work through the queue
+reports = Table(
+    "reports", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("reporter_id", Integer, ForeignKey("users.id"), nullable=False, index=True),
+    Column("target_type", String(10), nullable=False),    # post | comment | user
+    Column("target_id", Integer, nullable=False),
+    Column("target_user_id", Integer, index=True),        # who wrote it (no FK: survives account deletion)
+    Column("reason", String(20), nullable=False),         # spam | abuse | illegal | other
+    Column("details", String(500), nullable=False, server_default=""),
+    Column("snapshot", Text, nullable=False, server_default=""),  # copy of the reported text
+    Column("status", String(10), nullable=False, server_default="open", index=True),  # open | closed
+    Column("resolution", String(20)),                     # dismissed | removed | removed_banned
+    Column("resolved_by", Integer),
+    Column("resolved_at", String(19)),
+    Column("created_at", String(19), nullable=False),
+)
+
+# who blocked whom: no messages between them and no posts or comments from each other
+blocks = Table(
+    "blocks", metadata,
+    Column("blocker_id", Integer, ForeignKey("users.id"), primary_key=True),
+    Column("blocked_id", Integer, ForeignKey("users.id"), primary_key=True),
+    Column("created_at", String(19), nullable=False),
+)
+
+# audit trail of every admin action (no FK on the actor: the log outlives accounts)
+mod_log = Table(
+    "mod_log", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("actor_id", Integer),
+    Column("actor_name", String(80), nullable=False),
+    Column("action", String(30), nullable=False),
+    Column("target", String(60), nullable=False, server_default=""),
+    Column("detail", String(255), nullable=False, server_default=""),
+    Column("created_at", String(19), nullable=False),
+)
+
+# --- gigs imported from outside (Ticketmaster, ...). Kept apart from member posts: they are not in the
+# feed, have no comments, and are deleted again when stale (the providers only allow short-term storage) ---
+external_events = Table(
+    "external_events", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("source", String(20), nullable=False),            # ticketmaster
+    Column("external_id", String(64), nullable=False),       # the provider's own id
+    Column("title", String(255), nullable=False),
+    Column("venue", String(160), nullable=False, server_default=""),
+    Column("city", String(120), nullable=False, server_default=""),
+    Column("event_at", String(16), nullable=False, index=True),    # "YYYY-MM-DD HH:MM", local time at the venue
+    Column("time_known", Integer, nullable=False, server_default="1"),  # 0 = only the date is known
+    Column("latitude", Float, nullable=False, index=True),
+    Column("longitude", Float, nullable=False),
+    Column("ticket_url", String(600)),                       # where to buy tickets (the provider's page)
+    Column("genre", String(60)),
+    Column("area", String(60), nullable=False, server_default=""),  # which area / search cell / artist fetched it
+    Column("user_id", Integer, index=True),                  # the band, for events imported from its own artist page
+    Column("imported_at", String(19), nullable=False),
+    Column("seen_at", String(19), nullable=False),           # last time the provider still listed it
+    UniqueConstraint("source", "external_id", name="uq_external_event"),
+)
+
+# --- imported events an admin hid because the provider's data is wrong (e.g. a venue pinned in the wrong city).
+# The importer skips them, so they do not come back at the next refresh ---
+hidden_events = Table(
+    "hidden_events", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("source", String(20), nullable=False),
+    Column("external_id", String(64), nullable=False),
+    Column("title", String(255), nullable=False, server_default=""),   # to recognise it in the list
+    Column("reason", String(200), nullable=False, server_default=""),
+    Column("hidden_by", String(80), nullable=False, server_default=""),
+    Column("created_at", String(19), nullable=False),
+    UniqueConstraint("source", "external_id", name="uq_hidden_event"),
+)
+
+# --- which parts of the world were fetched from which provider, and when (on-demand import) ---
+import_coverage = Table(
+    "import_coverage", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("provider", String(20), nullable=False),
+    Column("cell", String(24), nullable=False),               # centre of a ~28 km grid square, "51.50,-0.25"
+    Column("radius_km", Integer, nullable=False),             # how far around the centre was fetched
+    Column("status", String(10), nullable=False),             # running | ok | partial | error
+    Column("fetched_at", String(19), nullable=False),
+    UniqueConstraint("provider", "cell", name="uq_import_coverage"),
+)
+
+# --- remembered answers of the place-name -> coordinates lookup (see geo.py) -----------------
+geocache = Table(
+    "geocache", metadata,
+    Column("place", String(120), primary_key=True),     # lower-case, single spaces
+    Column("latitude", Float),                          # NULL = the lookup found nothing
+    Column("longitude", Float),
+    Column("created_at", String(19), nullable=False),
 )
 
 
@@ -148,21 +286,24 @@ def rollback():
 
 
 def init_db():
-    # idempotent: only creates the tables that do not exist yet
-    metadata.create_all(get_engine())
+    # idempotent: applies every Alembic migration that has not run yet (see migrate.py)
+    from .migrate import upgrade
+    upgrade(get_engine())
     bac_log("db", "schema ready (tables: %s)" % ", ".join(metadata.tables))
 
 
-@click.command("init-db")
+@click.command("db-upgrade")
 def init_db_command():
-    """Create the tables (safe to run repeatedly)."""
+    """Bring the database to the latest schema (safe to run repeatedly)."""
     init_db()
-    click.echo("Initialised the database.")
+    click.echo("Database schema is up to date.")
 
 
 def init_app(app):
     url = _resolve_url(app)
-    engine = create_engine(url, pool_pre_ping=True)  # pre_ping: survive dropped remote connections
+    # pre_ping: survive dropped remote connections. SQLite: wait up to 30 s for another writer (the background import)
+    options = {"connect_args": {"timeout": 30}} if url.get_backend_name() == "sqlite" else {}
+    engine = create_engine(url, pool_pre_ping=True, **options)
     if url.get_backend_name() == "sqlite":
         @event.listens_for(engine, "connect")
         def _sqlite_fk(dbapi_conn, _):
@@ -174,5 +315,8 @@ def init_app(app):
         url.render_as_string(hide_password=True)))
     app.teardown_appcontext(close_db)
     app.cli.add_command(init_db_command)
-    with app.app_context():
-        init_db()  # make first run work without a manual step
+    if app.config.get("AUTO_MIGRATE", True):
+        # first run (and every upgrade) works without a manual step. Production setups that start
+        # several workers run `flask db-upgrade` once before them and set AUTO_MIGRATE=0.
+        with app.app_context():
+            init_db()

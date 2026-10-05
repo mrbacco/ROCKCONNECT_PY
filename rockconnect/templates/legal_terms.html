@@ -1,0 +1,59 @@
+{#
+  File: legal_terms.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-05
+  OPERATOR: this is a starting point, not legal advice. Set OPERATOR_NAME, OPERATOR_ADDRESS and CONTACT_EMAIL
+  in the environment and have a solicitor review it for your country before you launch.
+#}
+{% extends "_legal_base.html" %}
+{% block title %}Terms of service - {{ site.name }}{% endblock %}
+{% block legal %}
+<h1>Terms of service</h1>
+<p class="text-muted">These terms are between you and {{ site.operator }}{% if site.address %}, {{ site.address }}{% endif %}
+  (&ldquo;we&rdquo;), who runs {{ site.name }}.</p>
+
+<h2>1. Who can join</h2>
+<p>You must be at least {{ site.min_age }} years old. By creating an account you confirm that you are, and that the
+  information you give is true. One person or one band/venue per account, and you are responsible for keeping your
+  password safe.</p>
+
+<h2>2. What you may post</h2>
+<p>{{ site.name }} is a community for bands, venues and fans. You are responsible for what you post. You must not post
+  anything that:</p>
+<ul>
+  <li>is illegal, or promotes illegal activity;</li>
+  <li>harasses, threatens, impersonates or demeans anyone, or is hateful;</li>
+  <li>is spam, a scam, or advertising nobody asked for;</li>
+  <li>infringes someone else's copyright or privacy (only upload photos and music you have the right to share);</li>
+  <li>contains malware or tries to break or overload the service.</li>
+</ul>
+
+<h2>3. Your content</h2>
+<p>You keep ownership of what you post. You give us a non-exclusive, worldwide licence to store it and show it to the
+  other members as part of the service, for as long as it is on the service. You can delete your posts at any time, or
+  your whole account from the Account page.</p>
+
+<h2>4. Moderation</h2>
+<p>Members can report content and block other members. Our moderators may remove content and suspend or close accounts
+  that break these terms, with or without warning where the behaviour is serious. If your account is suspended and you
+  think that was a mistake, contact us at <a href="mailto:{{ site.contact }}">{{ site.contact }}</a>.</p>
+
+<h2>5. Ending your account</h2>
+<p>You can delete your account whenever you like (Account &rarr; Delete my account). Your profile, posts, photos,
+  comments, likes and private conversations are then erased. We may close accounts that stay inactive for a long time
+  or that break these terms.</p>
+
+<h2>6. The service</h2>
+<p>We work to keep {{ site.name }} running and safe, but it is provided &ldquo;as is&rdquo;. We cannot promise it will
+  always be available or free of errors. To the extent the law allows, we are not liable for losses caused by the
+  service being unavailable, or for what members post. Nothing in these terms limits any right you have by law that
+  cannot be limited.</p>
+
+<h2>7. Changes</h2>
+<p>We may update these terms. If the change is important we will tell you in the service or by email. Using the service
+  after a change means you accept it.</p>
+
+<h2>8. Contact</h2>
+<p>Questions: <a href="mailto:{{ site.contact }}">{{ site.contact }}</a>. These terms are governed by the law of the
+  country where {{ site.operator }} is established.</p>
+{% endblock %}

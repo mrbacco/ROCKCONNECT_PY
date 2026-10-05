@@ -1,0 +1,96 @@
+{#
+  File: account.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-05
+#}
+{% extends "layout.html" %}
+{% block title %}Account - {{ site.name }}{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-lg-6 offset-lg-3 col-md-8 offset-md-2">
+    <h2>Account</h2>
+
+    <div class="card rc-card"><div class="card-body">
+      <h5>Your details</h5>
+      <p class="mb-1"><strong>@{{ g.user['username'] }}</strong> &middot; {{ g.user['kind'] }}</p>
+      <p class="mb-2">{{ g.user['email'] }}
+        {% if g.user['email_verified'] %}<span class="badge badge-primary">confirmed</span>
+        {% else %}<span class="badge badge-danger">not confirmed</span>{% endif %}
+      </p>
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('views.edit') }}">Edit profile</a>
+    </div></div>
+
+    <div class="card rc-card"><div class="card-body">
+      <h5>Staying signed in</h5>
+      <p class="text-muted">You stay signed in on this device until you sign out, as long as you visit now and then.
+        Used a shared computer or lost a phone? End every login at once.</p>
+      <form method="POST" action="{{ url_for('account.signout_everywhere') }}"
+            data-confirm="Sign out on every device, including this one?">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <button class="btn btn-outline-light btn-sm" type="submit">Sign out on all devices</button>
+      </form>
+    </div></div>
+
+    <div class="card rc-card"><div class="card-body">
+      <h5>Change password</h5>
+      <form method="POST" action="{{ url_for('account.change_password') }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <div class="form-group">
+          <label for="current">Current password</label>
+          <input id="current" class="form-control" type="password" name="current" autocomplete="current-password" required>
+        </div>
+        <div class="form-group">
+          <label for="newpw">New password</label>
+          <input id="newpw" class="form-control" type="password" name="password" minlength="8" maxlength="72"
+                 autocomplete="new-password" required>
+        </div>
+        <div class="form-group">
+          <label for="newpw2">Repeat the new password</label>
+          <input id="newpw2" class="form-control" type="password" name="password2" minlength="8" maxlength="72"
+                 autocomplete="new-password" required>
+        </div>
+        <button class="btn btn-primary" type="submit">Change password</button>
+      </form>
+    </div></div>
+
+    <div class="card rc-card"><div class="card-body">
+      <h5>Blocked people</h5>
+      {% for b in blocked %}
+      <form class="d-flex align-items-center mb-1" method="POST" action="{{ url_for('moderation.unblock', user_id=b['id']) }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <input type="hidden" name="next" value="{{ url_for('account.settings') }}">
+        <span class="flex-grow-1">@{{ b['username'] }} <span class="text-muted">{{ b['name'] }}</span></span>
+        <button class="btn btn-link btn-sm" type="submit">Unblock</button>
+      </form>
+      {% else %}
+      <p class="text-muted mb-0">You have not blocked anyone.</p>
+      {% endfor %}
+    </div></div>
+
+    <div class="card rc-card"><div class="card-body">
+      <h5>Your data</h5>
+      <p class="text-muted">Download a copy of everything {{ site.name }} holds about you: profile, posts, comments,
+        likes, the messages you sent and your photos.</p>
+      <a class="btn btn-outline-primary" href="{{ url_for('account.export') }}">Download my data (.zip)</a>
+    </div></div>
+
+    <div class="card rc-card danger-zone"><div class="card-body">
+      <h5 class="text-danger">Delete my account</h5>
+      <p class="text-muted">This permanently erases your profile, posts, photos, comments, likes and your private
+        conversations (they disappear for the other person too). It cannot be undone.</p>
+      <form method="POST" action="{{ url_for('account.delete') }}" data-confirm="Really delete your account forever?">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <div class="form-group">
+          <label for="delpw">Your password</label>
+          <input id="delpw" class="form-control" type="password" name="password" autocomplete="current-password" required>
+        </div>
+        <div class="form-group">
+          <label for="delconfirm">Type DELETE to confirm</label>
+          <input id="delconfirm" class="form-control" type="text" name="confirm" autocomplete="off" required>
+        </div>
+        <button class="btn btn-outline-danger" type="submit">Delete my account</button>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

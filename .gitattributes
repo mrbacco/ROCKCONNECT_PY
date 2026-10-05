@@ -1,0 +1,6 @@
+# File: .gitattributes
+# Author: mrbacco04@gmail.com
+# Date: 2026-10-05
+# shell scripts must keep Unix line endings or the container cannot run them
+*.sh text eol=lf
+Dockerfile text eol=lf

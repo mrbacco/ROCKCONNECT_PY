@@ -1,0 +1,15 @@
+{#
+  File: error.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-05
+#}
+{% extends "layout.html" %}
+{% block title %}{{ title }} - {{ site.name }}{% endblock %}
+{% block content %}
+<div class="error-page text-center">
+  <div class="error-code">{{ code }}</div>
+  <h1 class="h3">{{ title }}</h1>
+  <p class="text-muted">{{ message }}</p>
+  <a class="btn btn-primary" href="{{ url_for('views.home') }}">Back to {{ site.name }}</a>
+</div>
+{% endblock %}

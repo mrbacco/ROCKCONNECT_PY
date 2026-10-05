@@ -1,29 +1,55 @@
 {#
   File: _post.html
   Author: mrbacco04@gmail.com
-  Date: 2026-10-02
+  Date: 2026-10-05
 #}
 {# One post card. Expects: p (post row), comments_by_post (dict). Included inside a {% for p in posts %} loop. #}
-{% from "_macros.html" import avatar %}
+{% from "_macros.html" import avatar, kind_badge %}
 {% set next_url = request.full_path.rstrip('?') %}
+{% set mine = g.user['id'] == p['author_id'] %}
 <div class="card rc-card post" id="post-{{ p['id'] }}">
   <div class="card-body pb-2">
     <div class="d-flex align-items-center mb-2">
       {{ avatar(p['author'], p['author_id']) }}
       <div class="ml-2 flex-grow-1">
         <a class="author" href="{{ url_for('views.profile', user_id=p['author_id']) }}">{{ p['author'] }}</a>
+        {{ kind_badge(p['author_kind']) }}
         <div class="text-muted small" title="{{ p['created_at'] }} UTC">{{ p['created_at']|timeago }}</div>
       </div>
-      {% if g.user['id'] == p['author_id'] %}
-      <form method="POST" action="{{ url_for('feed.delete_post', post_id=p['id']) }}"
-            onsubmit="return confirm('Delete this post?')">
+      {% if mine or g.user['role'] == 'admin' %}
+      <form method="POST" action="{{ url_for('feed.delete_post', post_id=p['id']) }}" data-confirm="Delete this post?">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <input type="hidden" name="next" value="{{ next_url }}">
         <button class="btn btn-link btn-sm text-muted" type="submit" title="Delete post">&#10005;</button>
       </form>
       {% endif %}
+      {% if not mine %}
+      <div class="dropdown">
+        <button class="btn btn-link btn-sm text-muted" type="button" data-toggle="dropdown"
+                aria-haspopup="true" aria-expanded="false" title="More" aria-label="More options">&#8943;</button>
+        <div class="dropdown-menu dropdown-menu-right">
+          <a class="dropdown-item" href="{{ url_for('moderation.report', target_type='post', target_id=p['id'], next=next_url) }}">Report post</a>
+          <form method="POST" action="{{ url_for('moderation.block', user_id=p['author_id']) }}"
+                data-confirm="Block {{ p['author'] }}? You will not see each other's posts or be able to message.">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <input type="hidden" name="next" value="{{ next_url }}">
+            <button class="dropdown-item" type="submit">Block {{ p['author'] }}</button>
+          </form>
+        </div>
+      </div>
+      {% endif %}
     </div>
 
+    {% if p['event_at'] %}
+    <div class="gig-box">
+      <span class="gig-when">&#127928; {{ p['event_at']|eventtime }}</span>
+      {% if p['event_place'] %}<span class="gig-where">{{ p['event_place'] }}</span>{% endif %}
+      {% if p['latitude'] is not none and p['longitude'] is not none %}
+      <a class="gig-map small" target="_blank" rel="noopener nofollow"
+         href="https://www.openstreetmap.org/?mlat={{ p['latitude'] }}&amp;mlon={{ p['longitude'] }}#map=15/{{ p['latitude'] }}/{{ p['longitude'] }}">&#128205; map</a>
+      {% endif %}
+    </div>
+    {% endif %}
     {% if p['body'] %}<p class="post-body">{{ p['body'] }}</p>{% endif %}
   </div>
   {% if p['image_filename'] %}
@@ -56,12 +82,15 @@
           <span class="post-body">{{ c['body'] }}</span>
         </div>
         <span class="text-muted small ml-2" title="{{ c['created_at'] }} UTC">{{ c['created_at']|timeago }}</span>
-        {% if g.user['id'] == c['user_id'] or g.user['id'] == p['author_id'] %}
+        {% if g.user['id'] == c['user_id'] or g.user['id'] == p['author_id'] or g.user['role'] == 'admin' %}
         <form class="d-inline" method="POST" action="{{ url_for('feed.delete_comment', comment_id=c['id']) }}">
           <input type="hidden" name="_csrf" value="{{ csrf_token }}">
           <input type="hidden" name="next" value="{{ next_url }}">
           <button class="btn btn-link btn-sm p-0 ml-1 text-muted small" type="submit">Delete</button>
         </form>
+        {% endif %}
+        {% if g.user['id'] != c['user_id'] %}
+        <a class="small text-muted ml-1" href="{{ url_for('moderation.report', target_type='comment', target_id=c['id'], next=next_url) }}">Report</a>
         {% endif %}
       </div>
     </div>

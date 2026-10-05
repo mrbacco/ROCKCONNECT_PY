@@ -4,13 +4,12 @@
 """Session management: register -> sign in -> timed session -> expiry -> sign in again."""
 import re
 from datetime import datetime, timedelta, timezone
-
-import pytest
+from email.utils import parsedate_to_datetime
 
 from rockconnect import create_app
 from rockconnect.db import execute
 from rockconnect.util import TIME_FORMAT
-from test_app import client, csrf, signin, signup  # noqa: F401
+from test_app import csrf, signin, signup
 
 FETCH = {"X-Requested-With": "fetch"}
 
@@ -80,7 +79,7 @@ def test_expired_session_sends_user_back_to_sign_in_and_they_can_continue(client
     assert client.get("/feed").status_code == 302           # still logged out
 
     # sign in again and land back on the page they were on
-    back = client.post("/users/signin", data={"username": "bacco", "password": "s3cret!", "next": "/feed",
+    back = client.post("/users/signin", data={"username": "bacco", "password": "S3cret!pw", "next": "/feed",
                                               "_csrf": csrf(client, "/users/signin")})
     assert back.status_code == 302 and back.headers["Location"].endswith("/feed")
     assert client.get("/feed").status_code == 200
@@ -138,11 +137,96 @@ def test_two_browsers_have_independent_sessions(client):
     assert other.get("/feed").status_code == 302
 
 
-def test_menu_shows_the_time_left(client):
+def test_menu_shows_no_countdown(client):
     signup(client)
     page = signin(client).get_data(as_text=True)
-    left = int(re.search(r'id="session-timer"[^>]*data-seconds-left="(\d+)"', page).group(1))
-    assert 3500 < left <= 3600                              # default 60 minutes
+    assert "session-timer" not in page and "data-seconds-left" not in page
+    assert "Your session lasts" not in page and "Signed in as bacco" in page
+
+
+def set_expiry(app, delta):
+    """Make the stored session end `delta` from now (so 'last renewed N days ago' can be simulated)."""
+    when = (datetime.now(timezone.utc) + delta).strftime(TIME_FORMAT)
+    with app.app_context():
+        execute("UPDATE sessions SET expires_at = :e", e=when)
+        from rockconnect.db import commit
+        commit()
+
+
+def expiry(app):
+    (row,) = session_rows(app)
+    return datetime.strptime(row["expires_at"], TIME_FORMAT).replace(tzinfo=timezone.utc)
+
+
+def test_login_lasts_a_month_by_default(client):
+    assert client.application.config["SESSION_LIFETIME_MINUTES"] == 60 * 24 * 30
+    signup(client)
+    signin(client)
+    left = expiry(client.application) - datetime.now(timezone.utc)
+    assert timedelta(days=29, hours=23) < left <= timedelta(days=30, seconds=5)
+
+
+def test_coming_back_after_five_days_you_are_still_signed_in_and_the_session_slides_forward(client):
+    signup(client)
+    signin(client)
+    set_expiry(client.application, timedelta(days=25))         # five days of the 30 have gone by
+    assert client.get("/feed").status_code == 200              # no sign-in needed
+    left = expiry(client.application) - datetime.now(timezone.utc)
+    assert left > timedelta(days=29, hours=23)                 # the month starts again from this visit
+
+
+def test_renewal_happens_at_most_once_a_day(client):
+    signup(client)
+    signin(client)
+    set_expiry(client.application, timedelta(days=29, hours=22))     # renewed 2 hours ago
+    before = expiry(client.application)
+    for _ in range(3):
+        client.get("/feed")
+    assert expiry(client.application) == before                      # no write on every click
+    set_expiry(client.application, timedelta(days=28))               # renewed 2 days ago
+    client.get("/feed")
+    assert expiry(client.application) > datetime.now(timezone.utc) + timedelta(days=29)
+
+
+def test_after_a_long_absence_you_do_have_to_sign_in_again(client):
+    signup(client)
+    signin(client)
+    set_expiry(client.application, timedelta(days=-1))               # away for over 30 days
+    r = client.get("/feed")
+    assert r.status_code == 302 and "/users/signin" in r.headers["Location"]
+    assert b"session has expired" in client.get("/users/signin").data
+
+
+def test_the_cookie_is_kept_for_the_whole_window_and_refreshed_on_every_visit(client):
+    signup(client)
+    signin(client)
+    r = client.get("/feed")
+    cookie = r.headers.get("Set-Cookie", "")
+    assert "Expires=" in cookie                                       # re-issued, so its end date slides too
+    ends = parsedate_to_datetime(re.search(r"Expires=([^;]+)", cookie).group(1))
+    assert ends - datetime.now(timezone.utc) > timedelta(days=30)
+
+
+def test_sign_out_on_all_devices(client):
+    signup(client)
+    signin(client)
+    phone = client.application.test_client()
+    signin(phone)
+    assert len(session_rows(client.application)) == 2
+    r = client.post("/account/signout-everywhere", data={"_csrf": csrf(client, "/account/")}, follow_redirects=True)
+    assert b"signed out on every device" in r.data
+    assert session_rows(client.application) == []
+    assert client.get("/feed").status_code == 302 and phone.get("/feed").status_code == 302
+
+
+def test_short_lifetimes_still_renew_sensibly(tmp_path):
+    app = make_app(tmp_path, minutes=8)                              # 8 minute sessions (a test setting)
+    c = app.test_client()
+    signup(c)
+    signin(c)
+    set_expiry(app, timedelta(minutes=5))                            # 3 of 8 minutes used: past the quarter mark
+    c.get("/feed")
+    assert expiry(app) > datetime.now(timezone.utc) + timedelta(minutes=7)
 
 
 def test_expired_session_data_is_cleaned_up_at_next_sign_in(client):
@@ -159,7 +243,7 @@ def test_expired_session_data_is_cleaned_up_at_next_sign_in(client):
 
 def test_next_parameter_cannot_redirect_off_site(client):
     signup(client)
-    r = client.post("/users/signin", data={"username": "bacco", "password": "s3cret!", "next": "//evil.example",
+    r = client.post("/users/signin", data={"username": "bacco", "password": "S3cret!pw", "next": "//evil.example",
                                            "_csrf": csrf(client, "/users/signin")})
     assert r.status_code == 302 and "evil.example" not in r.headers["Location"]
 
@@ -172,7 +256,7 @@ def test_wrong_password_does_not_create_a_session(client):
 
 def test_session_cookie_flags(client):
     signup(client)
-    r = client.post("/users/signin", data={"username": "bacco", "password": "s3cret!",
+    r = client.post("/users/signin", data={"username": "bacco", "password": "S3cret!pw",
                                            "_csrf": csrf(client, "/users/signin")})
     cookie = r.headers.get("Set-Cookie", "")
     assert "HttpOnly" in cookie and "SameSite=Lax" in cookie

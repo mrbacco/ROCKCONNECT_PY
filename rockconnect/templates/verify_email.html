@@ -1,0 +1,25 @@
+{#
+  File: verify_email.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-05
+#}
+{% extends "layout.html" %}
+{% from "_macros.html" import brand with context %}
+{% block title %}Confirm your email - {{ site.name }}{% endblock %}
+{% block body_class %}bkimg{% endblock %}
+{% block container_class %}container landing{% endblock %}
+{% block content %}
+<div class="landing-card card rc-card">
+  <div class="card-body p-4 text-center">
+    <h1 class="landing-title"><a class="brand" href="{{ url_for('views.home') }}">{{ brand() }}</a></h1>
+    <h2 class="h4 mb-3">Confirm your email</h2>
+    <p class="text-muted">{% if new_email %}Press the button to change your email address to
+      <strong>{{ new_email }}</strong>.{% else %}Press the button to confirm that this email address is yours.{% endif %}</p>
+    <form method="POST" action="{{ url_for('auth.verify', token=token) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <button class="btn btn-primary btn-lg btn-block" type="submit">Yes, confirm</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block footer %}{% include "_legal_links.html" %}{% endblock %}

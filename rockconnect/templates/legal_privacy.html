@@ -1,0 +1,77 @@
+{#
+  File: legal_privacy.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-05
+  OPERATOR: this is a starting point, not legal advice. It describes what the software does. Add your own
+  hosting / email / storage providers in section 6 and have it reviewed for your country before launch.
+#}
+{% extends "_legal_base.html" %}
+{% block title %}Privacy policy - {{ site.name }}{% endblock %}
+{% block legal %}
+<h1>Privacy policy</h1>
+<p class="text-muted"><strong>{{ site.operator }}</strong>{% if site.address %}, {{ site.address }},{% endif %} is the
+  controller of your personal data on {{ site.name }}. Contact for anything about your data:
+  <a href="mailto:{{ site.contact }}">{{ site.contact }}</a>.</p>
+
+<h2>1. What we collect</h2>
+<ul>
+  <li><strong>Account:</strong> username, name, email address, a password stored only as a bcrypt hash (we cannot read it),
+    your &ldquo;about&rdquo; text, whether you are a fan, band or venue, optional location and website, the date you
+    joined and the date you accepted the terms.</li>
+  <li><strong>What you post:</strong> posts, gig announcements, photos, comments, likes, and private messages you send.</li>
+  <li><strong>Moderation:</strong> reports you file or that are filed about your content, blocks you set, and actions
+    moderators take.</li>
+  <li><strong>Security:</strong> a sign-in session (stored as a hash) and short-lived counters derived from your IP address and
+    username that stop password guessing and spam. They are deleted after at most a day. Our web server may also keep
+    ordinary access logs (time, address, page requested).</li>
+</ul>
+<p><strong>Gigs near you.</strong> Bands and venues can add the position of a gig. The place name they type may be
+  looked up on the map with a geocoding service (by default OpenStreetMap's Nominatim; only that place text is sent, no
+  member data). When you use <em>Gigs near you</em>, your browser asks your permission, and your approximate position
+  (rounded to about 1 km) is sent to us only to find gigs: it is not stored, not logged and not shared.
+  Some listings in that search come from event partners (Ticketmaster, and where we use them Skiddle and Songkick).
+  To list gigs in a place nobody searched before, we ask them for events in the <em>rounded area</em> (a grid square of
+  about 28 km) around the search; they never receive the exact position, your name or any account detail. Ticket links
+  lead to the partner's own site, which has its own privacy policy. Bands may connect their own Bandsintown page.</p>
+<p>We do not use advertising or analytics trackers, and we do not load anything from third-party servers: the fonts and
+  scripts of the site are served by us.</p>
+
+<h2>2. Why, and on what legal basis</h2>
+<ul>
+  <li>To run your account and show your content to other members: <em>performance of the contract</em> (the terms).</li>
+  <li>To keep the community safe (reports, blocking, spam and abuse protection, security logs):
+    <em>legitimate interests</em>.</li>
+  <li>To send the emails that the service needs (confirm your address, reset your password): <em>performance of the
+    contract</em>. We do not send marketing emails.</li>
+</ul>
+
+<h2>3. Who can see it</h2>
+<p>Your profile, posts, photos and comments are visible to signed-in members of {{ site.name }} (your profile page
+  is visible to anyone). Photos are not public: they are only served to signed-in members. Private messages
+  are visible only to you and the person you write to, and to no one else, including moderators, unless you report
+  a problem and send us the text.</p>
+
+<h2>4. How long we keep it</h2>
+<p>Until you delete it. When you delete your account we erase your profile, posts, photos, comments, likes and private
+  conversations (a conversation is removed for both people, because it cannot exist with one side missing). Backups may
+  keep copies for a short, limited time. Records of moderation actions are kept without your content.</p>
+
+<h2>5. Your rights</h2>
+<p>You can, at any time, from the <em>Account</em> page: download a copy of your data (access and portability), correct it
+  (<em>Edit profile</em>), and delete your account (erasure). You can also ask us to restrict or stop using your data,
+  or object to it, by email. If you are unhappy with how we handle your data you can complain to your data protection
+  authority (in Ireland, the Data Protection Commission, dataprotection.ie).</p>
+
+<h2>6. Service providers</h2>
+<p>We use providers to host the service, store photos and send email. They only process data for us and under our
+  instructions. Ask <a href="mailto:{{ site.contact }}">{{ site.contact }}</a> for the current list.
+  Data is not sold. If a provider is outside the European Economic Area we rely on an appropriate safeguard such as
+  standard contractual clauses.</p>
+
+<h2>7. Children</h2>
+<p>{{ site.name }} is for people aged {{ site.min_age }} and over. If you think a younger person has joined, tell us and
+  we will delete the account.</p>
+
+<h2>8. Changes</h2>
+<p>If we change this policy in a way that matters to you we will tell you in the service or by email.</p>
+{% endblock %}

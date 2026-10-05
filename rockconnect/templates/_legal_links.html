@@ -1,0 +1,13 @@
+{#
+  File: _legal_links.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-05
+#}
+{# footer links shown on every page, including the landing, sign in and sign up pages #}
+<p class="text-muted footer-note text-center">
+  &copy; {{ site.name }}
+  &middot; <a href="{{ url_for('legal.terms') }}">Terms</a>
+  &middot; <a href="{{ url_for('legal.privacy') }}">Privacy</a>
+  &middot; <a href="{{ url_for('legal.cookies') }}">Cookies</a>
+  &middot; <a href="mailto:{{ site.contact }}">Contact</a>
+</p>

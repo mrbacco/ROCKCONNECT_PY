@@ -1,21 +1,31 @@
 {#
   File: index.html
   Author: mrbacco04@gmail.com
-  Date: 2026-10-02
+  Date: 2026-10-05
 #}
 {% extends "layout.html" %}
-{% from "_macros.html" import avatar %}
+{% from "_macros.html" import avatar, kind_badge %}
+{% block title %}People - {{ site.name }}{% endblock %}
 {% block content %}
 <div class="row">
   <div class="col-lg-6 offset-lg-3 col-md-8 offset-md-2">
     <h2>People{% if q %} matching "{{ q }}"{% endif %}</h2>
+    <ul class="nav nav-pills kind-filter mb-3">
+      <li class="nav-item"><a class="nav-link {{ 'active' if not kind }}" href="{{ url_for('views.index', q=q or None) }}">All</a></li>
+      {% for k, label in (('band', 'Bands'), ('venue', 'Venues'), ('fan', 'Fans')) %}
+      <li class="nav-item"><a class="nav-link {{ 'active' if kind == k }}"
+                              href="{{ url_for('views.index', kind=k, q=q or None) }}">{{ label }}</a></li>
+      {% endfor %}
+    </ul>
     <div class="card rc-card">
       <ul class="list-group list-group-flush">
         {% for user in users %}
         <li class="list-group-item d-flex align-items-center">
           {{ avatar(user['username'], user['id']) }}
           <a class="author ml-2" href="{{ url_for('views.profile', user_id=user['id']) }}">{{ user['username'] }}</a>
+          {{ kind_badge(user['kind']) }}
           <span class="text-muted ml-2">{{ user['name'] }}</span>
+          {% if user['location'] %}<span class="text-muted small ml-auto">{{ user['location'] }}</span>{% endif %}
         </li>
         {% else %}
         <li class="list-group-item">No users found.</li>

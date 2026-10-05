@@ -1,0 +1,7 @@
+# File: requirements-docker.txt
+# Author: mrbacco04@gmail.com
+# Date: 2026-10-05
+# What the production container installs: the app plus the PostgreSQL and S3 drivers.
+-r requirements.txt
+psycopg2-binary>=2.9
+boto3>=1.34

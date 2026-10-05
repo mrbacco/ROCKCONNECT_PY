@@ -1,24 +1,67 @@
 {#
   File: home.html
   Author: mrbacco04@gmail.com
-  Date: 2026-10-02
+  Date: 2026-10-05
 #}
-{# Landing page for visitors: no menu bar, only sign in / sign up. #}
+{# Landing page for visitors: no menu bar, a short pitch and sign in / sign up. #}
 {% extends "layout.html" %}
-{% block title %}Welcome to rockconnect{% endblock %}
+{% from "_macros.html" import brand with context %}
+{% block title %}{{ site.name }} - {{ site.tagline }}{% endblock %}
 {% block body_class %}bkimg{% endblock %}
-{% block container_class %}container landing{% endblock %}
+{% block container_class %}container landing-wide{% endblock %}
 {% block content %}
-<div class="landing-card card rc-card">
-  <div class="card-body text-center p-4">
-    <div class="landing-kicker">the home of rock fans</div>
-    <h1 class="landing-title brand">rock<span>connect</span></h1>
-    <p class="lead text-muted mb-4">Swap riffs, share photos from the gig, comment on what the crowd
-      is posting and chat backstage, one to one.</p>
-    <a class="btn btn-primary btn-lg btn-block" href="{{ url_for('auth.signin') }}">Sign in</a>
-    <div class="text-muted my-2">or</div>
-    <a class="btn btn-outline-primary btn-lg btn-block" href="{{ url_for('auth.signup') }}">Create a new account</a>
+<section class="hero text-center">
+  <div class="landing-kicker">bands &middot; venues &middot; fans</div>
+  <h1 class="landing-title brand">{{ brand() }}</h1>
+  <p class="lead hero-lead">{{ site.tagline }}</p>
+  <div class="hero-actions">
+    <a class="btn btn-primary btn-lg" href="{{ url_for('auth.signup') }}">Join free</a>
+    <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.signin') }}">Sign in</a>
   </div>
-</div>
+</section>
+
+<section class="feature-grid">
+  <div class="card rc-card feature">
+    <div class="card-body">
+      <div class="feature-icon" aria-hidden="true">&#127928;</div>
+      <h2 class="h5">For bands</h2>
+      <p class="text-muted mb-0">Announce gigs, share rehearsal photos and tour news, and talk to the venues and fans who
+        will fill the room.</p>
+    </div>
+  </div>
+  <div class="card rc-card feature">
+    <div class="card-body">
+      <div class="feature-icon" aria-hidden="true">&#127908;</div>
+      <h2 class="h5">For venues</h2>
+      <p class="text-muted mb-0">Put your calendar in front of the scene, book acts through private chat and keep
+        regulars coming back.</p>
+    </div>
+  </div>
+  <div class="card rc-card feature">
+    <div class="card-body">
+      <div class="feature-icon" aria-hidden="true">&#129304;</div>
+      <h2 class="h5">For fans</h2>
+      <p class="text-muted mb-0">See who is playing near you, share photos from the front row and chat backstage with
+        people who love the same noise.</p>
+    </div>
+  </div>
+</section>
+
+<section class="card rc-card landing-steps">
+  <div class="card-body">
+    <div class="row text-center">
+      <div class="col-md-4 mb-3 mb-md-0"><div class="step-no">1</div><strong>Create your account</strong>
+        <div class="text-muted small">Pick fan, band or venue. Takes a minute.</div></div>
+      <div class="col-md-4 mb-3 mb-md-0"><div class="step-no">2</div><strong>Post and announce</strong>
+        <div class="text-muted small">Photos, news and dated gig announcements on a shared gig board.</div></div>
+      <div class="col-md-4"><div class="step-no">3</div><strong>Connect</strong>
+        <div class="text-muted small">Comment, rock on and message each other privately.</div></div>
+    </div>
+  </div>
+</section>
+
+<p class="text-center text-muted trust-line">
+  Moderated community &middot; report and block tools &middot; your data is yours: download or delete it any time.
+</p>
 {% endblock %}
-{% block footer %}{% endblock %}
+{% block footer %}{% include "_legal_links.html" %}{% endblock %}

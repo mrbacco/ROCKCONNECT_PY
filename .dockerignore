@@ -1,0 +1,12 @@
+# File: .dockerignore
+# Author: mrbacco04@gmail.com
+# Date: 2026-10-05
+.git
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+instance
+.env
+tests
+docs

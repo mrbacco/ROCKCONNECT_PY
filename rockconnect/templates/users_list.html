@@ -1,11 +1,11 @@
 {#
   File: users_list.html
   Author: mrbacco04@gmail.com
-  Date: 2026-10-02
+  Date: 2026-10-05
 #}
 {% extends "layout.html" %}
-{% from "_macros.html" import avatar %}
-{% block title %}{{ user['username'] }} - rockconnect{% endblock %}
+{% from "_macros.html" import avatar, kind_badge %}
+{% block title %}{{ user['username'] }} - {{ site.name }}{% endblock %}
 {% block content %}
 <div class="row">
   <div class="col-lg-6 offset-lg-3 col-md-8 offset-md-2">
@@ -13,14 +13,17 @@
       <div class="card-body d-flex align-items-center">
         {{ avatar(user['username'], user['id'], 'lg') }}
         <div class="ml-3 flex-grow-1">
-          <h2 class="mb-0">{{ user['name'] }}</h2>
-          <div class="text-muted">@{{ user['username'] }}</div>
+          <h2 class="mb-0">{{ user['name'] }} {{ kind_badge(user['kind']) }}</h2>
+          <div class="text-muted">@{{ user['username'] }}{% if user['location'] %} &middot; {{ user['location'] }}{% endif %}</div>
+          {% if user['status'] == 'banned' %}<div class="text-danger small">Suspended</div>{% endif %}
         </div>
         {% if g.user and g.user['id'] != user['id'] %}
-        <form method="POST" action="{{ url_for('conversations.start', user_id=user['id']) }}">
-          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-          <button class="btn btn-primary" type="submit">&#128172; Message</button>
-        </form>
+          {% if not i_blocked and not blocked_me %}
+          <form method="POST" action="{{ url_for('conversations.start', user_id=user['id']) }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <button class="btn btn-primary" type="submit">&#128172; Message</button>
+          </form>
+          {% endif %}
         {% elif g.user %}
         <a class="btn btn-ghost" href="{{ url_for('views.edit') }}">Edit profile</a>
         {% endif %}
@@ -28,7 +31,27 @@
       <div class="card-body border-top">
         <h6 class="text-muted">About</h6>
         <p class="post-body mb-0">{{ user['about'] }}</p>
+        {% if user['website'] %}
+        <p class="mt-2 mb-0"><a href="{{ user['website'] }}" target="_blank" rel="nofollow noopener ugc">{{ user['website'] }}</a></p>
+        {% endif %}
       </div>
+      {% if g.user and g.user['id'] != user['id'] %}
+      <div class="card-body border-top py-2 d-flex">
+        {% if i_blocked %}
+        <form method="POST" action="{{ url_for('moderation.unblock', user_id=user['id']) }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <button class="btn btn-link btn-sm" type="submit">Unblock</button>
+        </form>
+        {% else %}
+        <form method="POST" action="{{ url_for('moderation.block', user_id=user['id']) }}"
+              data-confirm="Block {{ user['username'] }}? You will not see each other's posts or be able to message.">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <button class="btn btn-link btn-sm" type="submit">Block</button>
+        </form>
+        {% endif %}
+        <a class="btn btn-link btn-sm" href="{{ url_for('moderation.report', target_type='user', target_id=user['id']) }}">Report</a>
+      </div>
+      {% endif %}
     </div>
 
     {% if g.user %}
@@ -51,3 +74,4 @@
   </div>
 </div>
 {% endblock %}
+{% block footer %}{% if not g.user %}{% include "_legal_links.html" %}{% else %}{{ super() }}{% endif %}{% endblock %}

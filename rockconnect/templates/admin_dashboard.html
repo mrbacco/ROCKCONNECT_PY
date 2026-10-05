@@ -1,0 +1,48 @@
+{#
+  File: admin_dashboard.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-05
+#}
+{% extends "layout.html" %}
+{% block title %}Admin - {{ site.name }}{% endblock %}
+{% block content %}
+{% include "_admin_nav.html" %}
+<div class="stat-grid">
+  {% for label, value in (('Members', stats.members), ('Bands', stats.bands), ('Venues', stats.venues),
+                          ('Posts', stats.posts), ('Suspended', stats.banned), ('Open reports', stats.open_reports)) %}
+  <div class="card rc-card stat"><div class="card-body text-center">
+    <div class="stat-value">{{ value }}</div><div class="text-muted small text-uppercase">{{ label }}</div>
+  </div></div>
+  {% endfor %}
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card rc-card"><div class="card-header">Newest members</div>
+      <ul class="list-group list-group-flush">
+        {% for m in recent %}
+        <li class="list-group-item d-flex justify-content-between">
+          <a href="{{ url_for('views.profile', user_id=m['id']) }}">{{ m['username'] }}</a>
+          <span class="text-muted small">{{ m['kind'] }} &middot; {{ (m['created_at'] or '')|timeago }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card rc-card"><div class="card-header">Moderation log</div>
+      <ul class="list-group list-group-flush">
+        {% for e in log %}
+        <li class="list-group-item small">
+          <strong>{{ e['actor_name'] }}</strong> {{ e['action'] }} {{ e['target'] }}
+          {% if e['detail'] %}<span class="text-muted">({{ e['detail'] }})</span>{% endif %}
+          <span class="text-muted float-right">{{ e['created_at']|timeago }}</span>
+        </li>
+        {% else %}
+        <li class="list-group-item text-muted small">Nothing yet.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

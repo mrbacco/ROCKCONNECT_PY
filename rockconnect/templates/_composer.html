@@ -1,7 +1,7 @@
 {#
   File: _composer.html
   Author: mrbacco04@gmail.com
-  Date: 2026-10-02
+  Date: 2026-10-05
 #}
 {# Post box. Included by feed.html and by your own profile page. #}
 {% from "_macros.html" import avatar %}
@@ -13,14 +13,37 @@
     <div class="d-flex">
       {{ avatar(g.user['username'], g.user['id']) }}
       <textarea class="form-control composer-text ml-2" name="body" rows="2" maxlength="5000"
-                placeholder="What are you listening to, {{ g.user['name'].split()[0] }}?"></textarea>
+                placeholder="{% if g.user['kind'] == 'fan' %}What are you listening to, {{ g.user['name'].split()[0] }}?{% else %}What's the news, {{ g.user['name'] }}?{% endif %}"></textarea>
     </div>
+    {% if g.user['kind'] in ('band', 'venue') or g.user['role'] == 'admin' %}
+    {# bands and venues can attach a date: the post then also appears on the gig board #}
+    <details class="gig-fields mt-2">
+      <summary>&#128197; Announce a gig</summary>
+      <div class="form-row mt-2">
+        <div class="col-sm-6 mb-2">
+          <label class="small text-muted mb-0" for="event_at">Date and time</label>
+          <input id="event_at" class="form-control form-control-sm" type="datetime-local" name="event_at">
+        </div>
+        <div class="col-sm-6 mb-2">
+          <label class="small text-muted mb-0" for="event_place">Where</label>
+          <input id="event_place" class="form-control form-control-sm" type="text" name="event_place"
+                 maxlength="120" placeholder="Venue, town">
+        </div>
+      </div>
+      {# optional: fill the exact position from this device (best when posting from the venue); without it
+         the place name above is looked up on the map #}
+      <input type="hidden" name="event_lat" data-location-lat>
+      <input type="hidden" name="event_lon" data-location-lon>
+      <button class="btn btn-ghost btn-sm" type="button" data-use-location>&#128205; Use my current location</button>
+      <span class="small text-muted ml-1" data-location-status></span>
+    </details>
+    {% endif %}
     <hr class="my-2">
     <div class="d-flex justify-content-between align-items-center">
       <label class="mb-0 photo-pick">
         <span class="photo-label">&#128247; Photo</span>
         <input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp" class="d-none"
-               onchange="this.previousElementSibling.textContent = this.files.length ? '✔ ' + this.files[0].name : '📷 Photo'">
+               data-photo-input>
       </label>
       <button class="btn btn-primary btn-sm px-4" type="submit">Post</button>
     </div>

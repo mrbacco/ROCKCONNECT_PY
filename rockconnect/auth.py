@@ -1,28 +1,44 @@
 # File: auth.py
 # Author: mrbacco04@gmail.com
-# Date: 2026-10-02
-"""Sign up, sign in and sign out (the /users/add and /users/signin routes) + session handling.
+# Date: 2026-10-05
+"""Sign up, sign in, sign out, e-mail confirmation, password reset + session handling.
 
-Flow:  1. register (/users/add)         creates the account only
-       2. sign in (/users/signin)       creates a server-side session that lasts SESSION_MINUTES
-       3. every request                 checks the session is still alive (see session_store.py)
-       4. session expired or signed out the user has to sign in again (and returns to where they were)
+Flow:  1. register (/users/add)         creates the account and e-mails a confirmation link
+       2. sign in (/users/signin)       creates a server-side session (30 days of inactivity by default)
+       3. every request                 checks the session is alive and slides its end date forward
+       4. long absence, sign out, password change or suspension: the user signs in again (and returns to
+          where they were)
+Forgotten password: /users/forgot e-mails a one-time link to /users/reset/<token>.
 """
 import functools
 
 import bcrypt
-from flask import (Blueprint, flash, g, jsonify, redirect, render_template,
+from flask import (Blueprint, current_app, flash, g, jsonify, redirect, render_template,
                    request, session, url_for)
 from sqlalchemy.exc import IntegrityError
 
-from . import session_store
+from . import mail, ratelimit, session_store, tokens
 from .baclog import bac_log
-from .db import commit, execute, insert, rollback, users
-from .util import safe_next
+from .db import KINDS, commit, execute, insert, rollback, users
+from .util import (client_ip, external_url, now_str, safe_next, valid_email,
+                   valid_username)
 
 bp = Blueprint("auth", __name__, url_prefix="/users")
 
 FIELDS = ("username", "name", "email", "password", "about")
+MIN_PASSWORD_LENGTH = 8
+MAX_PASSWORD_BYTES = 72  # bcrypt only looks at the first 72 bytes, so longer ones are refused up front
+
+# endpoints that need no session lookup (and no database query)
+NO_SESSION_ENDPOINTS = ("static", "system.health", "system.theme")
+
+# the most used passwords: refused whatever else they satisfy
+COMMON_PASSWORDS = frozenset("""
+password 12345678 123456789 1234567890 qwertyui qwertyuiop 11111111 00000000 iloveyou password1 password123
+abc12345 abcd1234 1q2w3e4r 1qaz2wsx letmein1 welcome1 admin123 football baseball superman trustno1
+passw0rd p@ssw0rd p@ssword monkey12 dragon12 master12 sunshine princess starwars changeme rockandroll
+rockconnect metallica acdc1234 ironmaiden nirvana1 guitar123 whatever
+""".split())
 
 
 def hash_password(password):
@@ -33,9 +49,26 @@ def hash_password(password):
 
 def check_password(password, hashed):
     # compares the typed password with the stored hash; never logs either value
-    ok = bcrypt.checkpw(password.encode(), hashed.encode())
+    encoded = password.encode()
+    if len(encoded) > MAX_PASSWORD_BYTES:
+        return False  # cannot match a bcrypt hash made by this app, and bcrypt refuses to look at it
+    ok = bcrypt.checkpw(encoded, hashed.encode())
     bac_log("auth", "bcrypt password check -> %s" % ("match" if ok else "NO match"))
     return ok
+
+
+def password_error(password, username="", email=""):
+    """Why this password is not acceptable (text for the user), or None when it is fine."""
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return "Password must be at least %d characters." % MIN_PASSWORD_LENGTH
+    if len(password.encode()) > MAX_PASSWORD_BYTES:
+        return "Password is too long (at most %d bytes)." % MAX_PASSWORD_BYTES
+    lowered = password.lower()
+    if lowered in COMMON_PASSWORDS or len(set(lowered)) < 3:
+        return "That password is too easy to guess. Pick something less common."
+    if lowered in (username.lower(), email.lower(), email.lower().split("@")[0]):
+        return "Your password must not be your username or email."
+    return None
 
 
 def _wants_json():
@@ -63,14 +96,30 @@ def login_required(view):
     return wrapped
 
 
+def verified_required(view):
+    """Decorator (use under @login_required): when the operator requires confirmed e-mail addresses,
+    posting, commenting and messaging wait until the member has clicked the link in their mail."""
+    @functools.wraps(view)
+    def wrapped(**kwargs):
+        if current_app.config["REQUIRE_EMAIL_VERIFICATION"] and not g.user["email_verified"]:
+            bac_log("auth", "user id=%s blocked: e-mail not confirmed yet" % g.user["id"])
+            message = "Please confirm your email address first (check your inbox)."
+            if _wants_json():
+                return jsonify(error=message), 403
+            flash(message, "warning")
+            return redirect(url_for("account.settings"))
+        return view(**kwargs)
+
+    return wrapped
+
+
 @bp.before_app_request
 def load_logged_in_user():
     """Runs before every request: finds the session behind the cookie and sets g.user (or None)."""
     g.user = None
     g.session_expired = False
-    g.session_seconds_left = 0
-    if request.endpoint == "static":
-        return  # css/js/images need no session (and no database query)
+    if request.endpoint in NO_SESSION_ENDPOINTS:
+        return  # css/js/images and health checks need no session (and no database query)
     token = session.get("sid")
     if not token:
         return
@@ -82,33 +131,65 @@ def load_logged_in_user():
         flash("Your session has expired. Please sign in again.", "warning")
         bac_log("session", "expired or unknown session cookie -> user must sign in again")
         return
+    if user["status"] == "banned":
+        # an admin suspended this account while it was signed in: end the session right away
+        session_store.destroy(token)
+        session.pop("sid", None)
+        g.session_expired = True
+        flash("This account has been suspended.", "danger")
+        bac_log("session", "banned user id=%s was signed out" % user["id"])
+        return
     g.user = user
-    g.session_seconds_left = session_store.seconds_left(user["session_expires_at"])
+    session_store.renew(token, user["session_expires_at"])  # visiting keeps you signed in
 
 
-@bp.app_context_processor
-def inject_session_info():
-    # available in every template: drives the countdown in the menu bar
-    return {"session_seconds_left": getattr(g, "session_seconds_left", 0)}
+def send_verification(user_id, current_email, new_email=None):
+    """E-mail a confirmation link to the address being confirmed."""
+    token = tokens.create(user_id, "verify", new_email)
+    site = current_app.config["SITE_NAME"]
+    mail.send(new_email or current_email, "Confirm your email for %s" % site,
+              "Welcome to %s!\n\nConfirm this email address by opening the link below "
+              "(it works once and expires in 24 hours):\n\n%s\n\nIf you did not ask for this, ignore this message."
+              % (site, external_url("auth.verify", token=token)))
 
 
 @bp.route("/add", methods=("GET", "POST"))
 def signup():
     form = {}
     if request.method == "POST":
+        ratelimit.allow("signup_ip", client_ip())
         # collect the registration fields (password is kept exactly as typed)
         form = {f: request.form.get(f, "").strip() for f in FIELDS}
         form["password"] = request.form.get("password", "")  # keep as typed
-        bac_log("signup", "attempt for username=%r" % form["username"])
+        form["email"] = form["email"].lower()
+        form["kind"] = request.form.get("kind", "fan")
+        form["accept"] = request.form.get("accept", "")
+        bac_log("signup", "attempt for username=%r kind=%s" % (form["username"], form["kind"]))
         missing = [f for f in FIELDS if not form[f]]
+        error = None
         if missing:
-            bac_log("signup", "rejected, missing fields: %s" % ", ".join(missing))
-            flash("All fields are required (missing: %s)." % ", ".join(missing), "danger")
+            error = "All fields are required (missing: %s)." % ", ".join(missing)
+        elif not valid_username(form["username"]):
+            error = "Username must be 3-30 characters: letters, digits, dot, dash or underscore."
+        elif not valid_email(form["email"]):
+            error = "That does not look like an email address."
+        elif form["kind"] not in KINDS:
+            error = "Choose fan, band or venue."
+        elif len(form["name"]) > 120 or len(form["about"]) > 1000:
+            error = "Name or about text is too long."
+        elif password_error(form["password"], form["username"], form["email"]):
+            error = password_error(form["password"], form["username"], form["email"])
+        elif form["accept"] != "1":
+            error = "You must accept the terms and confirm your age to join."
+        if error:
+            bac_log("signup", "rejected: %s" % error)
+            flash(error, "danger")
         else:
             try:
                 new_id = insert(
                     users, username=form["username"], name=form["name"], email=form["email"],
-                    password=hash_password(form["password"]), about=form["about"],
+                    password=hash_password(form["password"]), about=form["about"], kind=form["kind"],
+                    terms_accepted_at=now_str(), created_at=now_str(),
                 )
                 commit()
             except IntegrityError:
@@ -120,8 +201,10 @@ def signup():
                 # registering only creates the account; the session starts when the user signs in
                 bac_log("signup", "user %r created (id=%s), now needs to sign in"
                         % (form["username"], new_id))
-                flash("Welcome to rockconnect, %s! Your account is ready, please sign in."
-                      % form["name"], "success")
+                send_verification(new_id, form["email"])
+                flash("Welcome to %s, %s! Your account is ready, please sign in. We sent a link to "
+                      "%s to confirm your email address."
+                      % (current_app.config["SITE_NAME"], form["name"], form["email"]), "success")
                 return redirect(url_for("auth.signin"))
     form.pop("password", None)
     return render_template("add_users.html", title="rockconnect", form=form)
@@ -135,14 +218,24 @@ def signin():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         bac_log("signin", "attempt for username=%r" % username)
+        # too many recent failures from this address or for this username: refuse before touching the password
+        ratelimit.check("signin_ip", client_ip())
+        ratelimit.check("signin_user", username)
         user = execute(
             "SELECT * FROM users WHERE username = :username", username=username
         ).mappings().fetchone()
         if user is None or not check_password(password, user["password"]):
             # same message for unknown user and wrong password (no user enumeration)
             bac_log("signin", "FAILED for username=%r (unknown user or bad password)" % username)
+            ratelimit.hit("signin_ip", client_ip())
+            ratelimit.hit("signin_user", username)
             flash("Invalid credentials.", "danger")
             return render_template("signin_users.html", title="rockconnect", next_url=next_url), 401
+        if user["status"] == "banned":
+            bac_log("signin", "refused: user id=%s is banned" % user["id"])
+            flash("This account has been suspended.%s" % (
+                " Reason: %s" % user["ban_reason"] if user["ban_reason"] else ""), "danger")
+            return render_template("signin_users.html", title="rockconnect", next_url=next_url), 403
         session_store.destroy(session.get("sid"))  # end any older session of this browser
         session.clear()                            # fresh cookie (prevents session fixation)
         token, expires_at = session_store.create(user["id"])
@@ -150,8 +243,7 @@ def signin():
         session.permanent = True                   # cookie outlives the login (see create_app) so expiry can be explained
         bac_log("signin", "SUCCESS user=%r id=%s, session valid until %s UTC"
                 % (user["username"], user["id"], expires_at))
-        flash("Signed in as %s. Your session lasts %d minutes."
-              % (user["username"], session_store.lifetime_minutes()), "success")
+        flash("Signed in as %s." % user["username"], "success")
         return redirect(safe_next(next_url, url_for("feed.index")))
     return render_template("signin_users.html", title="rockconnect", next_url=next_url)
 
@@ -163,3 +255,102 @@ def signout():
     session.clear()
     flash("You have been signed out.", "info")
     return redirect(url_for("views.home"))
+
+
+# ------------------------------------------------------------------ e-mail confirmation
+@bp.route("/verify/<token>", methods=("GET", "POST"))
+def verify(token):
+    """The link in the confirmation mail. GET only shows a button, the POST does the work, so mail
+    scanners that pre-open links cannot use the link up."""
+    row = tokens.peek(token, "verify")
+    if row is None:
+        bac_log("verify", "invalid or expired confirmation link")
+        flash("That confirmation link is invalid or has expired. Sign in and ask for a new one.", "warning")
+        return redirect(url_for("auth.signin"))
+    if request.method == "POST":
+        row = tokens.consume(token, "verify")
+        if row is None:
+            flash("That confirmation link was already used.", "warning")
+            return redirect(url_for("auth.signin"))
+        try:
+            if row["new_email"]:
+                execute("UPDATE users SET email = :e, email_verified = 1 WHERE id = :id",
+                        e=row["new_email"], id=row["user_id"])
+            else:
+                execute("UPDATE users SET email_verified = 1 WHERE id = :id", id=row["user_id"])
+            commit()
+        except IntegrityError:
+            rollback()
+            flash("That email address is already used by another account.", "danger")
+            return redirect(url_for("account.settings" if g.user else "auth.signin"))
+        bac_log("verify", "email confirmed for user id=%s" % row["user_id"])
+        flash("Thank you, your email address is confirmed.", "success")
+        return redirect(url_for("feed.index" if g.user else "auth.signin"))
+    return render_template("verify_email.html", token=token, new_email=row["new_email"])
+
+
+@bp.route("/verify", methods=("POST",))
+@login_required
+def resend_verification():
+    """'Send me the confirmation mail again' button."""
+    if g.user["email_verified"]:
+        flash("Your email address is already confirmed.", "info")
+    else:
+        ratelimit.allow("verify_user", g.user["id"])
+        send_verification(g.user["id"], g.user["email"])
+        flash("We sent a new confirmation link to %s." % g.user["email"], "info")
+    return redirect(safe_next(request.form.get("next"), url_for("account.settings")))
+
+
+# ------------------------------------------------------------------ forgotten password
+@bp.route("/forgot", methods=("GET", "POST"))
+def forgot():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        ratelimit.allow("forgot_ip", client_ip())
+        ratelimit.allow("forgot_email", email)
+        user = execute("SELECT id, email, status FROM users WHERE lower(email) = :e", e=email).mappings().fetchone()
+        if user is not None and user["status"] == "active":
+            token = tokens.create(user["id"], "reset")
+            site = current_app.config["SITE_NAME"]
+            mail.send(user["email"], "Reset your %s password" % site,
+                      "Someone asked to reset the password of your %s account.\n\n"
+                      "Choose a new password here (the link works once and expires in 1 hour):\n\n%s\n\n"
+                      "If this was not you, ignore this message: your password stays as it is."
+                      % (site, external_url("auth.reset", token=token)))
+            bac_log("forgot", "reset mail queued for user id=%s" % user["id"])
+        else:
+            bac_log("forgot", "no active account for that address (nothing sent)")
+        # the same answer whether or not the address is registered (no account enumeration)
+        flash("If that address belongs to an account, we sent a link to reset the password.", "info")
+        return redirect(url_for("auth.signin"))
+    return render_template("forgot.html")
+
+
+@bp.route("/reset/<token>", methods=("GET", "POST"))
+def reset(token):
+    row = tokens.peek(token, "reset")
+    if row is None:
+        flash("That reset link is invalid or has expired. Please ask for a new one.", "warning")
+        return redirect(url_for("auth.forgot"))
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        user = execute("SELECT username, email FROM users WHERE id = :id", id=row["user_id"]).mappings().fetchone()
+        error = password_error(password, user["username"], user["email"])
+        if password != request.form.get("password2", ""):
+            error = "The two passwords do not match."
+        if error:
+            flash(error, "danger")
+            return render_template("reset.html", token=token)
+        if tokens.consume(token, "reset") is None:
+            flash("That reset link was already used.", "warning")
+            return redirect(url_for("auth.forgot"))
+        # a reset proves the owner reads this mailbox, so the address counts as confirmed too
+        execute("UPDATE users SET password = :p, email_verified = 1 WHERE id = :id",
+                p=hash_password(password), id=row["user_id"])
+        session_store.destroy_all(row["user_id"])  # whoever had the old password is signed out everywhere
+        commit()
+        bac_log("reset", "password changed for user id=%s, all sessions ended" % row["user_id"])
+        flash("Your password was changed. Please sign in.", "success")
+        return redirect(url_for("auth.signin"))
+    return render_template("reset.html", token=token)

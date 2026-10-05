@@ -3,21 +3,10 @@
 # Date: 2026-10-02
 import re
 
-import pytest
-
 from rockconnect import create_app
 
 USER = dict(username="bacco", name="Andrea B", email="a@b.com",
-            password="s3cret!", about="I like rock")
-
-
-@pytest.fixture
-def client(tmp_path):
-    app = create_app({"TESTING": True,
-                      "INSTANCE_PATH": str(tmp_path / "instance"),  # never the real instance folder
-                      "DATABASE_URL": "sqlite:///" + str(tmp_path / "t.sqlite"),
-                      "UPLOAD_DIR": str(tmp_path / "uploads")})
-    return app.test_client()
+            password="S3cret!pw", about="I like rock", accept="1")
 
 
 def csrf(client, url="/users/add"):
@@ -30,7 +19,7 @@ def signup(client, **over):
     return client.post("/users/add", data=data, follow_redirects=True)
 
 
-def signin(client, username="bacco", password="s3cret!"):
+def signin(client, username="bacco", password="S3cret!pw"):
     return client.post("/users/signin", data={
         "username": username, "password": password, "_csrf": csrf(client, "/users/signin")},
         follow_redirects=True)

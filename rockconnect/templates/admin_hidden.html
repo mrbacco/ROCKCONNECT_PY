@@ -1,0 +1,35 @@
+{#
+  File: admin_hidden.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-05
+#}
+{% extends "layout.html" %}
+{% block title %}Hidden events - {{ site.name }}{% endblock %}
+{% block content %}
+{% include "_admin_nav.html" %}
+<p class="text-muted">Imported events you hid because the provider's data was wrong. They are not imported again until you bring them back.</p>
+<div class="card rc-card">
+  <div class="table-responsive">
+    <table class="table table-sm admin-table mb-0">
+      <thead><tr><th>Event</th><th>Source</th><th>Reason</th><th>Hidden by</th><th></th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r['title'] or r['external_id'] }}</td><td>{{ r['source'] }}</td>
+        <td class="small">{{ r['reason'] }}</td>
+        <td class="small">{{ r['hidden_by'] }} <span class="text-muted">{{ r['created_at']|timeago }}</span></td>
+        <td class="text-right">
+          <form class="d-inline" method="POST" action="{{ url_for('admin.unhide', hidden_id=r['id']) }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <button class="btn btn-ghost btn-sm" type="submit">Bring back</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="text-muted text-center">Nothing hidden.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

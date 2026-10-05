@@ -1,0 +1,57 @@
+{#
+  File: admin_users.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-05
+#}
+{% extends "layout.html" %}
+{% block title %}Members - {{ site.name }}{% endblock %}
+{% block content %}
+{% include "_admin_nav.html" %}
+<form class="form-inline mb-3" method="GET" action="{{ url_for('admin.members') }}">
+  <input class="form-control form-control-sm mr-2" type="text" name="q" value="{{ q }}" placeholder="username, name or email">
+  <button class="btn btn-primary btn-sm" type="submit">Search</button>
+</form>
+<div class="card rc-card">
+  <div class="table-responsive">
+    <table class="table table-sm admin-table mb-0">
+      <thead><tr><th>Member</th><th>Type</th><th>Email</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+      {% for m in members %}
+      <tr>
+        <td><a href="{{ url_for('views.profile', user_id=m['id']) }}">{{ m['username'] }}</a>
+          {% if m['role'] == 'admin' %}<span class="badge badge-primary">admin</span>{% endif %}
+          <div class="text-muted small">{{ m['name'] }}</div></td>
+        <td>{{ m['kind'] }}</td>
+        <td class="small">{{ m['email'] }} {% if m['email_verified'] %}&#10003;{% else %}<span class="text-danger">unconfirmed</span>{% endif %}</td>
+        <td>{% if m['status'] == 'banned' %}<span class="text-danger">suspended</span>
+            <div class="text-muted small">{{ m['ban_reason'] or '' }}</div>{% else %}active{% endif %}</td>
+        <td class="text-right">
+          {% if m['role'] != 'admin' and m['id'] != g.user['id'] %}
+          {% if m['status'] == 'banned' %}
+          <form class="d-inline" method="POST" action="{{ url_for('admin.unban', user_id=m['id']) }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <button class="btn btn-ghost btn-sm" type="submit">Unsuspend</button>
+          </form>
+          {% else %}
+          <form class="d-inline" method="POST" action="{{ url_for('admin.ban', user_id=m['id']) }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <input class="form-control form-control-sm d-inline-block w-auto" type="text" name="reason" placeholder="reason" maxlength="255">
+            <button class="btn btn-outline-danger btn-sm" type="submit">Suspend</button>
+          </form>
+          {% endif %}
+          <form class="d-inline" method="POST" action="{{ url_for('admin.delete_member', user_id=m['id']) }}"
+                data-confirm="Erase {{ m['username'] }} and ALL their content? This cannot be undone.">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <button class="btn btn-link btn-sm text-danger" type="submit">Erase</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="text-muted text-center">Nobody found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

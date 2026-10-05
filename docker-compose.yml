@@ -1,0 +1,43 @@
+# File: docker-compose.yml
+# Author: mrbacco04@gmail.com
+# Date: 2026-10-05
+# A complete installation on one machine: the app + PostgreSQL.
+#   1. cp .env.example .env     then uncomment and fill in SECRET_KEY and POSTGRES_PASSWORD (and SITE_NAME ...)
+#   2. docker compose up -d --build
+#   3. docker compose exec app flask --app wsgi make-admin <your-username>   (after you registered)
+# Put a reverse proxy with https in front (Caddy, nginx, Traefik) and set TRUST_PROXY=1 and SITE_URL.
+services:
+  app:
+    build: .
+    env_file: .env
+    environment:
+      # these two are wired here so they always match the database service below
+      DATABASE_URL: postgresql://rockconnect:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/rockconnect
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
+    ports:
+      - "8000:8000"
+    volumes:
+      - uploads:/app/instance          # photos (unless you use S3_BUCKET)
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: rockconnect
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: rockconnect
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rockconnect"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  uploads:

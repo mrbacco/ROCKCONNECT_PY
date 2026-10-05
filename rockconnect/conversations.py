@@ -1,17 +1,18 @@
 # File: conversations.py
 # Author: mrbacco04@gmail.com
-# Date: 2026-10-02
+# Date: 2026-10-05
 """Messenger-style private chat between two users (login required for everything).
 
 The browser (static/js/chat.js) polls /conversations/<id>/messages every 2 seconds and sends
 messages with fetch(), so new messages appear without reloading. The navbar badge polls
 /conversations/unread.
 """
-from flask import (Blueprint, abort, flash, g, jsonify, redirect,
+from flask import (Blueprint, abort, current_app, flash, g, jsonify, redirect,
                    render_template, request, url_for)
 from sqlalchemy.exc import IntegrityError
 
-from .auth import login_required
+from . import ratelimit
+from .auth import login_required, verified_required
 from .baclog import bac_log
 from .db import commit, execute, insert, messages, rollback
 from .util import now_str
@@ -34,6 +35,15 @@ _LAST_READ = ("COALESCE((SELECT r.last_read_id FROM conversation_reads r"
 def _wants_json():
     # chat.js sends this header; plain HTML forms do not
     return request.headers.get("X-Requested-With") == "fetch"
+
+
+def messaging_blocked(me, other_id):
+    """True when I cannot message `other_id`: they blocked me, I blocked them, or their account is suspended."""
+    if execute("SELECT 1 FROM blocks WHERE (blocker_id = :a AND blocked_id = :b)"
+               " OR (blocker_id = :b AND blocked_id = :a)", a=me, b=other_id).fetchone():
+        return True
+    row = execute("SELECT status FROM users WHERE id = :id", id=other_id).fetchone()
+    return row is None or row[0] != "active"
 
 
 def _message_json(row, me):
@@ -132,6 +142,7 @@ def unread():
 
 @bp.route("/start/<int:user_id>", methods=("POST",))
 @login_required
+@verified_required
 def start(user_id):
     """Open the conversation with another user, creating it the first time."""
     me = g.user["id"]
@@ -141,6 +152,10 @@ def start(user_id):
         return redirect(url_for("views.profile", user_id=me))
     if execute("SELECT 1 FROM users WHERE id = :id", id=user_id).fetchone() is None:
         abort(404)
+    if messaging_blocked(me, user_id):
+        bac_log("chat", "user id=%s cannot start a chat with id=%s (blocked or suspended)" % (me, user_id))
+        flash("You cannot message this person.", "warning")
+        return redirect(url_for("views.profile", user_id=user_id))
 
     low, high = sorted((me, user_id))  # the pair is stored low < high so it is unique
     find = ("SELECT id FROM conversations"
@@ -166,15 +181,21 @@ def thread(conversation_id):
     """GET shows the chat; POST sends a message (JSON reply for chat.js, redirect for plain forms)."""
     conv = _my_conversation(conversation_id)
     if request.method == "POST":
-        body = request.form.get("body", "").strip()
-        error = None
-        if not body:
-            error = "Write something first."
-        elif len(body) > MAX_MESSAGE_LENGTH:
-            error = "Message too long (max %d characters)." % MAX_MESSAGE_LENGTH
+        if current_app.config["REQUIRE_EMAIL_VERIFICATION"] and not g.user["email_verified"]:
+            error, status = "Please confirm your email address first (check your inbox).", 403
+        elif messaging_blocked(g.user["id"], conv["other_id"]):
+            error, status = "You cannot message this person.", 403
+        else:
+            ratelimit.allow("message_user", g.user["id"])
+            body = request.form.get("body", "").strip()
+            error, status = None, 400
+            if not body:
+                error = "Write something first."
+            elif len(body) > MAX_MESSAGE_LENGTH:
+                error = "Message too long (max %d characters)." % MAX_MESSAGE_LENGTH
         if error:
             if _wants_json():
-                return jsonify(error=error), 400
+                return jsonify(error=error), status
             flash(error, "warning")
             return redirect(url_for("conversations.thread", conversation_id=conversation_id))
 
@@ -202,7 +223,8 @@ def thread(conversation_id):
         _mark_read(conversation_id, msgs[-1]["id"])  # opening the chat = reading it
     bac_log("chat", "showing conversation %s (%d message(s))" % (conversation_id, len(msgs)))
     return render_template("chat.html", conversations=_sidebar(), conv=conv, messages=msgs,
-                           max_length=MAX_MESSAGE_LENGTH)
+                           max_length=MAX_MESSAGE_LENGTH,
+                           can_message=not messaging_blocked(g.user["id"], conv["other_id"]))
 
 
 @bp.route("/<int:conversation_id>/messages")

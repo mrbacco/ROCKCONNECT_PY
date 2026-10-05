@@ -1,11 +1,11 @@
 /*
  * File: style.css
  * Author: mrbacco04@gmail.com
- * Date: 2026-10-02
+ * Date: 2026-10-05
  *
  * "Stage" theme for rockconnect: near-black page, amber stage-light accent, Roboto Condensed
  * type, sharp corners, hard offset shadows (gig-poster look) and guitar-pick shaped avatars.
- * It overrides Bootstrap 4, which is loaded first.
+ * It overrides Bootstrap 4, which is loaded first. The accent colour is set per installation by /theme.css.
  */
 
 /* ---------- design tokens ---------- */
@@ -19,6 +19,7 @@
     --muted: #9b978d;
     --amber: #ffb000;         /* the one accent colour: a stage light */
     --amber-hi: #ffc233;
+    --amber-rgb: 255, 176, 0; /* same colour as r, g, b for rgba(); theme.css overrides all three */
     --danger: #e5383b;
     --font: "Roboto Condensed", "Roboto Narrow", "Arial Narrow", "Helvetica Neue Condensed",
             sans-serif-condensed, sans-serif;
@@ -74,12 +75,6 @@ hr { border-top: 1px solid var(--line); }
 }
 .navbar-rc .nav-link:hover, .navbar-rc .nav-link.text-white:hover { color: var(--amber) !important; }
 
-/* session countdown in the menu bar; turns amber and pulses in the last 5 minutes */
-.session-timer { color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-size: .78rem; }
-.session-timer b { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
-.session-timer.ending b { color: var(--amber); animation: rc-pulse 1.2s ease-in-out infinite; }
-@keyframes rc-pulse { 50% { opacity: .35; } }
-
 /* ---------- landing / sign in / sign up ---------- */
 .landing { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; }
 .landing-card {
@@ -105,7 +100,7 @@ hr { border-top: 1px solid var(--line); }
     color: var(--text);
     border: 1px solid var(--line);
     border-radius: 2px;
-    box-shadow: 4px 4px 0 rgba(255, 176, 0, .14);
+    box-shadow: 4px 4px 0 rgba(var(--amber-rgb), .14);
     margin-bottom: 1.25rem;
 }
 /* the landing card gets the big solid amber shadow (declared after .rc-card so it wins) */
@@ -129,7 +124,7 @@ hr { border-top: 1px solid var(--line); }
 }
 .form-control:focus {
     background: var(--input); color: var(--text); border-color: var(--amber);
-    box-shadow: 0 0 0 .15rem rgba(255, 176, 0, .25);
+    box-shadow: 0 0 0 .15rem rgba(var(--amber-rgb), .25);
 }
 .form-control::placeholder { color: #6f6c64; }
 
@@ -142,7 +137,7 @@ hr { border-top: 1px solid var(--line); }
 .btn-primary:hover, .btn-primary:focus, .btn-primary:active {
     background: var(--amber-hi) !important; border-color: var(--amber-hi) !important; color: #111 !important;
 }
-.btn-primary:focus { box-shadow: 0 0 0 .2rem rgba(255, 176, 0, .35); }
+.btn-primary:focus { box-shadow: 0 0 0 .2rem rgba(var(--amber-rgb), .35); }
 .btn-primary:disabled { background: #7a5a10; border-color: #7a5a10; color: #222; }
 .btn-outline-primary { color: var(--amber); border-color: var(--amber); }
 .btn-outline-primary:hover { background: var(--amber); border-color: var(--amber); color: #111; }
@@ -236,3 +231,83 @@ hr { border-top: 1px solid var(--line); }
     .chat-pane { height: 60vh; }
     .message { max-width: 90%; }
 }
+
+/* ================= community features (bands, venues, gigs) ================= */
+
+/* little label next to bands and venues */
+.kind-badge {
+    display: inline-block; padding: .05rem .45rem; margin-left: .35rem;
+    font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em;
+    border: 1px solid var(--amber); color: var(--amber); border-radius: 2px; vertical-align: middle;
+}
+.kind-venue { border-color: #48cae4; color: #48cae4; }
+
+/* a dated gig announcement inside a post */
+.gig-box {
+    display: flex; flex-wrap: wrap; gap: .25rem 1rem; align-items: baseline;
+    border-left: 4px solid var(--amber); background: rgba(var(--amber-rgb), .08);
+    padding: .4rem .8rem; margin-bottom: .6rem;
+}
+.gig-when { font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--amber); }
+.gig-where { color: var(--text); }
+.gig-fields summary { cursor: pointer; color: var(--amber); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; font-size: .85rem; }
+
+.gig-map { margin-left: auto; }
+.text-amber { color: var(--amber); }
+.nearby .list-group-item { background: transparent; }
+
+/* filter pills (people, admin) */
+.kind-filter .nav-link { color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-weight: 700; border-radius: 2px; }
+.kind-filter .nav-link:hover { color: var(--amber); }
+.kind-filter .nav-link.active { background: var(--amber); color: #111; }
+
+/* dropdown menu on posts */
+.dropdown-menu { background: var(--panel-2); border: 1px solid var(--line); border-radius: 2px; }
+.dropdown-item { color: var(--text); font-family: var(--font); }
+.dropdown-item:hover, .dropdown-item:focus { background: var(--panel); color: var(--amber); }
+
+/* landing page */
+.landing-wide { max-width: 980px; padding-top: 3rem; padding-bottom: 1rem; }
+.hero { padding: 2rem 0 2.5rem; }
+.hero .landing-title { font-size: clamp(1.5rem, 8vw, 3.6rem); letter-spacing: .06em; margin-bottom: .75rem; }
+.hero-lead { max-width: 640px; margin: 0 auto 1.5rem; font-size: 1.3rem; color: var(--text); }
+.hero-actions .btn { min-width: 170px; margin: .25rem; }
+.feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem; margin-bottom: 1.25rem; }
+.feature-grid .rc-card { margin-bottom: 0; background: rgba(23, 23, 26, .92); }
+.feature-icon { font-size: 2rem; margin-bottom: .25rem; }
+.landing-steps { background: rgba(23, 23, 26, .92); }
+.step-no {
+    display: inline-flex; align-items: center; justify-content: center; width: 2.2rem; height: 2.2rem;
+    background: var(--amber); color: #111; font-weight: 900; border-radius: 50%; margin-bottom: .4rem;
+}
+.trust-line { font-size: .85rem; letter-spacing: .04em; }
+
+/* footer links */
+.footer-note a { color: var(--muted); }
+.footer-note a:hover { color: var(--amber); }
+
+/* legal pages */
+.legal-text h1 { font-size: 1.8rem; margin-bottom: 1rem; }
+.legal-text h2 { font-size: 1.05rem; margin-top: 1.5rem; color: var(--amber); }
+.legal-text p, .legal-text li { color: var(--text); font-size: 1rem; }
+.legal-table { color: var(--text); }
+.legal-table th, .legal-table td { border-color: var(--line); }
+
+/* account, reports, admin */
+.danger-zone { border-color: rgba(229, 56, 59, .5); }
+.report-quote { border-left: 3px solid var(--line); padding: .25rem .8rem; color: var(--muted); margin: .5rem 0 1rem; }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
+.stat-grid .rc-card { margin-bottom: 0; }
+.stat-value { font-size: 2rem; font-weight: 900; color: var(--amber); line-height: 1.1; }
+.admin-table { color: var(--text); }
+.admin-table th { color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-size: .75rem; border-color: var(--line); }
+.admin-table td { border-color: var(--line); vertical-align: middle; }
+.text-normal { text-transform: none !important; letter-spacing: 0 !important; font-size: .9rem !important; color: var(--text) !important; }
+
+.navbar-rc .nav-link, .navbar-rc .btn, .navbar-rc .badge { white-space: nowrap; }
+.nav-search { width: 150px; }
+.nav-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* error pages */
+.error-page { padding: 4rem 0; }
+.error-code { font-size: 6rem; font-weight: 900; color: var(--amber); line-height: 1; letter-spacing: .05em; }

@@ -1,0 +1,23 @@
+{#
+  File: legal_cookies.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-05
+  OPERATOR: accurate for the software as shipped. If you add analytics, ads or embeds you need a consent banner.
+#}
+{% extends "_legal_base.html" %}
+{% block title %}Cookies - {{ site.name }}{% endblock %}
+{% block legal %}
+<h1>Cookies</h1>
+<p>{{ site.name }} sets <strong>one cookie</strong>, called <code>session</code>. It is strictly necessary: it keeps you
+  signed in and carries a security token that protects the forms against forgery. It is set when you visit, it is
+  not readable by scripts, it is only sent to this site, and it keeps you signed in until you sign out, as long as
+  you visit now and then. You can end all your logins at once from the Account page.</p>
+<table class="table table-sm legal-table">
+  <thead><tr><th>Cookie</th><th>Purpose</th><th>Lifetime</th></tr></thead>
+  <tbody><tr><td><code>session</code></td><td>Sign-in and form security</td><td>Until you sign out; renewed each time you visit, and it ends after 30 days (the operator may change this) without a visit</td></tr></tbody>
+</table>
+<p>We do not use advertising, analytics or tracking cookies, and we load nothing from third-party sites. Because the
+  only cookie is strictly necessary, no consent banner is required. If that ever changes we will ask you first.</p>
+<p>Questions: <a href="mailto:{{ site.contact }}">{{ site.contact }}</a>. See also the
+  <a href="{{ url_for('legal.privacy') }}">privacy policy</a>.</p>
+{% endblock %}

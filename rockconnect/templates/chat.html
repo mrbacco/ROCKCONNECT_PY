@@ -1,11 +1,11 @@
 {#
   File: chat.html
   Author: mrbacco04@gmail.com
-  Date: 2026-10-02
+  Date: 2026-10-05
 #}
 {% extends "layout.html" %}
 {% from "_macros.html" import avatar %}
-{% block title %}Messages - rockconnect{% endblock %}
+{% block title %}Messages - {{ site.name }}{% endblock %}
 {% block content %}
 <div class="row chat-layout">
   {# ---- left: all my conversations, newest first; bold + dot = unread ---- #}
@@ -60,6 +60,7 @@
         {% if not messages %}<p id="empty" class="text-muted text-center my-auto">No messages yet, say hello!</p>{% endif %}
       </div>
 
+      {% if can_message %}
       <form id="chat-form" class="chat-form" method="POST"
             action="{{ url_for('conversations.thread', conversation_id=conv['id']) }}">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
@@ -70,6 +71,9 @@
           <button id="chat-send" class="btn btn-primary ml-2" type="submit">Send</button>
         </div>
       </form>
+      {% else %}
+      <div class="chat-form p-3 text-center text-muted small">You cannot send messages in this chat (blocked or suspended).</div>
+      {% endif %}
     </div>
     {% else %}
     <div class="card rc-card chat-pane">
@@ -81,4 +85,4 @@
   </div>
 </div>
 {% endblock %}
-{% block scripts %}{% if conv %}<script src="{{ asset('js/chat.js') }}"></script>{% endif %}{% endblock %}
+{% block scripts %}{% if conv and can_message %}<script src="{{ asset('js/chat.js') }}"></script>{% endif %}{% endblock %}

@@ -1,0 +1,43 @@
+{#
+  File: event.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-05
+#}
+{% extends "layout.html" %}
+{% block title %}{{ e['title'] }} - {{ site.name }}{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-lg-6 offset-lg-3 col-md-8 offset-md-2">
+    <div class="card rc-card"><div class="card-body">
+      <div class="small text-muted text-uppercase mb-1">Listed event{% if e['genre'] %} &middot; {{ e['genre'] }}{% endif %}</div>
+      <h1 class="h3">{{ e['title'] }}</h1>
+      <div class="gig-box">
+        <span class="gig-when">&#127928; {{ e['event_at']|eventlabel(e['time_known']) }}</span>
+        <span class="gig-where">{{ e['venue'] }}{% if e['venue'] and e['city'] %}, {% endif %}{{ e['city'] }}</span>
+        <a class="gig-map small" target="_blank" rel="noopener nofollow"
+           href="https://www.openstreetmap.org/?mlat={{ e['latitude'] }}&amp;mlon={{ e['longitude'] }}#map=15/{{ e['latitude'] }}/{{ e['longitude'] }}">&#128205; map</a>
+      </div>
+      {% if e['ticket_url'] %}
+      <a class="btn btn-primary btn-block mt-3" target="_blank" rel="noopener nofollow sponsored"
+         href="{{ e['ticket_url'] }}">Get tickets on {{ source_label }}</a>
+      {% endif %}
+      <p class="small text-muted mt-3 mb-0">This listing was imported from
+        {{ source_label }} and is refreshed regularly. Dates, prices and
+        availability can change: check the ticket page. {{ site.name }} is not the seller.</p>
+      {% if g.user['role'] == 'admin' and not e['user_id'] %}
+      <form class="mt-3 pt-3 border-top" method="POST" action="{{ url_for('events.hide_event', event_id=e['id']) }}"
+            data-confirm="Hide this event? It will be removed and not imported again.">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <div class="form-row">
+          <div class="col-sm-8 mb-2"><input class="form-control form-control-sm" type="text" name="reason" maxlength="200"
+               placeholder="Why? e.g. venue is pinned in the wrong city" aria-label="Reason"></div>
+          <div class="col-sm-4 mb-2"><button class="btn btn-outline-danger btn-sm btn-block" type="submit">Hide this event</button></div>
+        </div>
+        <div class="small text-muted">Admin: use this when the provider's data is wrong (wrong place on the map).</div>
+      </form>
+      {% endif %}
+    </div></div>
+    <a class="btn btn-ghost btn-block mb-3" href="{{ url_for('feed.gigs') }}">&larr; Back to the gig board</a>
+  </div>
+</div>
+{% endblock %}

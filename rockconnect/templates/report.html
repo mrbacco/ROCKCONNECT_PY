@@ -1,0 +1,34 @@
+{#
+  File: report.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-05
+#}
+{% extends "layout.html" %}
+{% block title %}Report - {{ site.name }}{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-lg-6 offset-lg-3 col-md-8 offset-md-2">
+    <div class="card rc-card"><div class="card-body">
+      <h2 class="h4">Report {{ label }}</h2>
+      {% if snapshot %}<blockquote class="report-quote post-body">{{ snapshot[:300] }}</blockquote>{% endif %}
+      <form method="POST" action="{{ url_for('moderation.report', target_type=target_type, target_id=target_id) }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <input type="hidden" name="next" value="{{ next_url }}">
+        <div class="form-group">
+          <label for="reason">What is wrong?</label>
+          <select id="reason" class="form-control" name="reason" required>
+            <option value="">Choose a reason</option>
+            {% for key, text in reasons.items() %}<option value="{{ key }}">{{ text }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="details">More details (optional)</label>
+          <textarea id="details" class="form-control" name="details" rows="3" maxlength="500"></textarea>
+        </div>
+        <button class="btn btn-primary" type="submit">Send report</button>
+        <a class="btn btn-ghost" href="{{ next_url }}">Cancel</a>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

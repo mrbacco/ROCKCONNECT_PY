@@ -1,0 +1,33 @@
+{#
+  File: reset.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-05
+#}
+{% extends "layout.html" %}
+{% from "_macros.html" import brand with context %}
+{% block title %}Choose a new password - {{ site.name }}{% endblock %}
+{% block body_class %}bkimg{% endblock %}
+{% block container_class %}container landing{% endblock %}
+{% block content %}
+<div class="landing-card card rc-card">
+  <div class="card-body p-4">
+    <h1 class="landing-title text-center"><a class="brand" href="{{ url_for('views.home') }}">{{ brand() }}</a></h1>
+    <h2 class="h4 text-center mb-3">Choose a new password</h2>
+    <form method="POST" action="{{ url_for('auth.reset', token=token) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <div class="form-group">
+        <label for="pw">New password</label>
+        <input id="pw" class="form-control" type="password" name="password" minlength="8" maxlength="72"
+               autocomplete="new-password" required autofocus>
+      </div>
+      <div class="form-group">
+        <label for="pw2">Repeat it</label>
+        <input id="pw2" class="form-control" type="password" name="password2" minlength="8" maxlength="72"
+               autocomplete="new-password" required>
+      </div>
+      <button class="btn btn-primary btn-block" type="submit">Change password</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block footer %}{% include "_legal_links.html" %}{% endblock %}

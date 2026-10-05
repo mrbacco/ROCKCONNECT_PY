@@ -1,0 +1,55 @@
+{#
+  File: gigs.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-05
+#}
+{% extends "layout.html" %}
+{% block title %}Gigs - {{ site.name }}{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-lg-6 offset-lg-3 col-md-8 offset-md-2">
+    <h2>Upcoming gigs</h2>
+
+    {# "gigs near me": gigs.js asks the browser for the position and calls /api/v1/gigs/nearby #}
+    <div class="card rc-card nearby" id="nearby" data-url="{{ url_for('api.nearby_gigs') }}">
+      <div class="card-body">
+        <h5 class="mb-2">&#128205; Gigs near you</h5>
+        <div class="d-flex flex-wrap align-items-center">
+          <button id="nearby-locate" class="btn btn-primary btn-sm mr-2 mb-2" type="button">Use my current location</button>
+          <select id="nearby-radius" class="form-control form-control-sm w-auto mr-2 mb-2" aria-label="Distance">
+            {% for km in (10, 25, 50, 100, 250) %}<option value="{{ km }}" {{ 'selected' if km == 50 }}>within {{ km }} km</option>{% endfor %}
+          </select>
+          {% if g.user['location'] %}
+          <button id="nearby-profile" class="btn btn-ghost btn-sm mb-2" type="button">Use {{ g.user['location'] }}</button>
+          {% endif %}
+        </div>
+        <form id="nearby-form" class="form-inline">
+          <input id="nearby-place" class="form-control form-control-sm mr-2" type="text" maxlength="120"
+                 placeholder="or type a town, e.g. Galway" aria-label="Town">
+          <button class="btn btn-outline-primary btn-sm" type="submit">Search</button>
+        </form>
+        <div id="nearby-status" class="small text-muted mt-2" aria-live="polite"></div>
+        <ul id="nearby-results" class="list-group list-group-flush mt-2"></ul>
+        <p class="small text-muted mt-2 mb-0">Your exact position is used only for this search and is not stored.
+          To list gigs in a new place, the <em>rounded area</em> (about 28 km) around it is looked up with our event
+          partners; never who you are.</p>
+      </div>
+    </div>
+
+    {% if g.user['kind'] in ('band', 'venue') %}
+    <p class="text-muted">Got a gig? Use <em>Announce a gig</em> in the post box on your <a href="{{ url_for('feed.index') }}">feed</a>.</p>
+    {% else %}
+    <p class="text-muted">All gigs announced by the bands and venues of the community, soonest first.</p>
+    {% endif %}
+
+    {% for p in posts %}
+      {% include "_post.html" %}
+    {% else %}
+      <div class="card rc-card"><div class="card-body text-center text-muted">
+        No gigs announced yet. Bands and venues can add one from their feed.
+      </div></div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ asset('js/gigs.js') }}"></script>{% endblock %}

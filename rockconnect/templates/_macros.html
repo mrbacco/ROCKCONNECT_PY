@@ -1,9 +1,19 @@
 {#
   File: _macros.html
   Author: mrbacco04@gmail.com
-  Date: 2026-10-02
+  Date: 2026-10-05
 #}
 {# round avatar with the user's initial; the colour comes from the user id (6 colours in style.css) #}
 {% macro avatar(username, user_id, size='') -%}
 <span class="avatar av{{ user_id % 6 }} {{ size }}" aria-hidden="true">{{ username[0]|upper }}</span>
+{%- endmacro %}
+
+{# the site name, with its tail in the accent colour (SITE_NAME / SITE_NAME_ACCENT) #}
+{% macro brand() -%}
+{{ site.name_head }}{% if site.name_tail %}<span>{{ site.name_tail }}</span>{% endif %}
+{%- endmacro %}
+
+{# small label next to bands and venues (fans get none) #}
+{% macro kind_badge(kind) -%}
+{% if kind in ('band', 'venue') %}<span class="kind-badge kind-{{ kind }}">{{ kind }}</span>{% endif %}
 {%- endmacro %}

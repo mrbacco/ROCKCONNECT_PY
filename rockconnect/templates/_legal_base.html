@@ -1,0 +1,17 @@
+{#
+  File: _legal_base.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-05
+#}
+{% extends "layout.html" %}
+{% block container_class %}container rc-container legal{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-lg-8 offset-lg-2">
+    <div class="card rc-card"><div class="card-body legal-text">
+      {% block legal %}{% endblock %}
+    </div></div>
+  </div>
+</div>
+{% endblock %}
+{% block footer %}{% include "_legal_links.html" %}{% endblock %}

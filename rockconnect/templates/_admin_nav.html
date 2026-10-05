@@ -1,0 +1,12 @@
+{#
+  File: _admin_nav.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-05
+#}
+<h2>Admin</h2>
+<ul class="nav nav-pills kind-filter mb-3">
+  <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'admin.dashboard' }}" href="{{ url_for('admin.dashboard') }}">Overview</a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'admin.report_queue' }}" href="{{ url_for('admin.report_queue') }}">Reports</a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'admin.members' }}" href="{{ url_for('admin.members') }}">Members</a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'admin.hidden' }}" href="{{ url_for('admin.hidden') }}">Hidden events</a></li>
+</ul>
