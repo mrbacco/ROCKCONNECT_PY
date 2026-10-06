@@ -37,7 +37,7 @@ def _deliver_smtp(cfg, message):
 
 def send(to, subject, body):
     """Queue one e-mail. Returns True when it was handed to the backend."""
-    app = current_app._get_current_object()
+    app = current_app._get_current_object()  # type: ignore[attr-defined]  # the real app, for the background sender
     cfg = app.config
     backend = cfg["MAIL_BACKEND"]
     if backend == "memory":

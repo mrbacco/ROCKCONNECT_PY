@@ -6,7 +6,8 @@
  * "Gigs near you" on the gig board (loaded only on /gigs):
  *  - "Use my current location" asks the browser for the position and calls GET /api/v1/gigs/nearby
  *  - or type a town / use the town of your profile: the server finds it on the map
- *  - results are gigs announced by members plus listings imported from Ticketmaster (marked, with a tickets link)
+ *  - results are gigs announced by members plus listings imported from the event providers (marked, with a tickets link)
+ *  - every result has Going / Interested buttons and the number of members going
  * The position is rounded to 2 decimals (about 1 km) before it is sent: plenty for "near me", and it keeps
  * the exact spot out of any web server log. Results are built with textContent (never innerHTML).
  */
@@ -62,8 +63,57 @@
         }
         li.appendChild(from);
       }
+      li.appendChild(attendanceButtons(gig));
       list.appendChild(li);
     });
+  }
+
+  // "Going" and "Interested" under each result; the answer of the server updates the counts in place
+  var attendUrl = panel.getAttribute("data-attend-url");
+  var csrf = panel.getAttribute("data-csrf");
+
+  function attendanceButtons(gig) {
+    var box = element("div", "gig-actions d-flex flex-wrap align-items-center mt-1");
+    var going = element("button", "", "✓ Going");
+    var interested = element("button", "", "★ Interested");
+    var counts = element("span", "small text-muted ml-1");
+    going.type = interested.type = "button";
+
+    function paint() {
+      going.className = "btn btn-sm mr-1 " + (gig.my_status === "going" ? "btn-primary" : "btn-outline-primary");
+      interested.className = "btn btn-sm mr-2 " + (gig.my_status === "interested" ? "btn-primary" : "btn-outline-light");
+      counts.textContent = gig.going_count + " going · " + gig.interested_count + " interested"
+        + (gig.friends_going ? " · " + gig.friends_going + " you follow" : "");
+    }
+
+    function send(status) {
+      var form = new FormData();
+      form.append("_csrf", csrf);
+      form.append("source", gig.source);
+      form.append("ref", gig.ref);
+      form.append("status", status);
+      fetch(attendUrl, { method: "POST", body: form, credentials: "same-origin", headers: { "X-Requested-With": "fetch" } })
+        .then(function (r) {
+          return r.json().catch(function () { return {}; }).then(function (body) { return { status: r.status, ok: r.ok, body: body }; });
+        })
+        .then(function (res) {
+          if (res.status === 401) { window.rcSessionExpired(res.body.login_url); return; }
+          if (!res.ok) { say(res.body.error || "Could not save that, please try again."); return; }
+          gig.my_status = res.body.status;
+          gig.going_count = res.body.going_count;
+          gig.interested_count = res.body.interested_count;
+          paint();
+        })
+        .catch(function () { say("Could not reach the server. Check your connection and try again."); });
+    }
+
+    going.addEventListener("click", function () { send(gig.my_status === "going" ? "none" : "going"); });
+    interested.addEventListener("click", function () { send(gig.my_status === "interested" ? "none" : "interested"); });
+    paint();
+    box.appendChild(going);
+    box.appendChild(interested);
+    box.appendChild(counts);
+    return box;
   }
 
   var latest = 0;   // the number of the newest search: an older answer arriving late must not overwrite it

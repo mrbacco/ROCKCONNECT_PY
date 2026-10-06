@@ -30,6 +30,13 @@
                  maxlength="120" placeholder="Venue, town">
         </div>
       </div>
+      <div class="form-group mb-2">
+        <label class="small text-muted mb-0" for="gig_genre">Genre</label>
+        <select id="gig_genre" class="form-control form-control-sm" name="genre">
+          <option value="">Not specified</option>
+          {% for key, label in genre_labels.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+        </select>
+      </div>
       {# optional: fill the exact position from this device (best when posting from the venue); without it
          the place name above is looked up on the map #}
       <input type="hidden" name="event_lat" data-location-lat>

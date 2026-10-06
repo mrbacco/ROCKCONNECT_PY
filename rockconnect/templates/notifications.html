@@ -1,0 +1,29 @@
+{#
+  File: notifications.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-06
+#}
+{% extends "layout.html" %}
+{% block title %}Notifications - {{ site.name }}{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-lg-6 offset-lg-3 col-md-8 offset-md-2">
+    <h2>Notifications</h2>
+    <p class="text-muted small">When someone follows you, or someone you follow says they are going to a gig. Switch the gig alerts off
+      in <a href="{{ url_for('views.edit') }}">Edit profile</a>.</p>
+    <div class="card rc-card">
+      <ul class="list-group list-group-flush">
+        {% for n in notifications %}
+        <li class="list-group-item d-flex align-items-baseline {{ 'notification-new' if not n['read_at'] }}">
+          <span class="chip {{ 'chip-goal' if n['kind'] == 'follow' else 'chip-instrument' }}">{{ 'follow' if n['kind'] == 'follow' else 'gig' }}</span>
+          {% if n['url'] %}<a class="author" href="{{ n['url'] }}">{{ n['text'] }}</a>{% else %}<span>{{ n['text'] }}</span>{% endif %}
+          <span class="small text-muted ml-auto pl-2">{{ n['created_at']|timeago }}</span>
+        </li>
+        {% else %}
+        <li class="list-group-item text-muted">Nothing yet. Follow some people from the <a href="{{ url_for('views.index') }}">People</a> page.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

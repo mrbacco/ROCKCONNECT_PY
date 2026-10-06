@@ -3,10 +3,16 @@
   Author: mrbacco04@gmail.com
   Date: 2026-10-05
 #}
-<h2>Admin</h2>
+<h2>{{ 'Admin' if g.user['role'] == 'admin' else 'Moderation' }}</h2>
 <ul class="nav nav-pills kind-filter mb-3">
+  {% if g.user['role'] == 'admin' %}
   <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'admin.dashboard' }}" href="{{ url_for('admin.dashboard') }}">Overview</a></li>
+  {% endif %}
+  <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'admin.review_queue' }}" href="{{ url_for('admin.review_queue') }}">Review</a></li>
   <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'admin.report_queue' }}" href="{{ url_for('admin.report_queue') }}">Reports</a></li>
+  {% if g.user['role'] == 'admin' %}
   <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'admin.members' }}" href="{{ url_for('admin.members') }}">Members</a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'admin.words' }}" href="{{ url_for('admin.words') }}">Blocked words</a></li>
   <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'admin.hidden' }}" href="{{ url_for('admin.hidden') }}">Hidden events</a></li>
+  {% endif %}
 </ul>

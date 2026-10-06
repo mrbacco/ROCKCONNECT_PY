@@ -81,6 +81,19 @@ def test_theme_css_follows_accent_color(tmp_path):
     assert "--amber: #2ec4b6" in text and "--amber-rgb: 46,196,182" in text
 
 
+def test_theme_css_adds_readable_text_colours_for_any_accent(tmp_path):
+    from rockconnect.system import _contrast, readable_colors
+    for accent in ("#ffc400", "#ffb000", "#2ec4b6", "#1a2b6d", "#ffffff", "#000000"):
+        on_accent, ink = readable_colors(accent)
+        rgb = lambda h: tuple(int(h[i:i + 2], 16) for i in (1, 3, 5))  # noqa: E731
+        assert _contrast(rgb(accent), rgb(on_accent)) >= 4.5, accent            # text on the accent can be read
+        assert _contrast(rgb(ink), (255, 255, 255)) >= 4.5, accent              # the accent used as text on white can be read
+    yellow = make_app(tmp_path).test_client().get("/theme.css").get_data(as_text=True)
+    assert "--amber: #ffc400" in yellow and "--on-accent: #16161a" in yellow and "--accent-ink: #8f6e00" in yellow
+    navy = make_app(tmp_path / "navy", ACCENT_COLOR="#1a2b6d").test_client().get("/theme.css").get_data(as_text=True)
+    assert "--on-accent: #ffffff" in navy                                          # a deep accent gets white text
+
+
 def test_invalid_accent_color_falls_back(monkeypatch, tmp_path):
     from rockconnect import settings
     assert settings.accent_color("red; } body { display:none") == settings.DEFAULT_ACCENT

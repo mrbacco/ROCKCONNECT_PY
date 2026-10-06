@@ -10,7 +10,7 @@ import os
 import re
 
 DEFAULT_SECRET = "dev-only-change-me"
-DEFAULT_ACCENT = "#ffb000"
+DEFAULT_ACCENT = "#ffc400"
 
 # name -> (how many events, in how many seconds). Used by ratelimit.py; override in test_config
 # or with RATE_LIMIT_<NAME>="count/seconds" in the environment (e.g. RATE_LIMIT_SIGNIN_IP=50/900).
@@ -31,6 +31,11 @@ DEFAULT_RATE_LIMITS = {
     "geocode_user":  (20, 3600),   # place-name lookups per member (they go to the geocoding service)
     "ondemand_site": (60, 3600),   # fetches of new areas from the event providers, for the whole site
     "artist_sync_user": (6, 3600), # "refresh my Bandsintown dates" per band
+    "attend_user":   (60, 3600),   # going / interested clicks per member
+    "follow_user":   (60, 3600),   # follow / unfollow clicks per member
+    "gigtalk_user":  (30, 3600),   # comments under gigs per member
+    "people_user":   (120, 600),   # people searches and attendee lists per member
+    "chat_request_user": (15, 86400),  # new conversations (message requests) started per member and day
 }
 
 
@@ -88,7 +93,14 @@ def build():
         "OPERATOR_NAME": env("OPERATOR_NAME", "the operator of this site"),
         "OPERATOR_ADDRESS": env("OPERATOR_ADDRESS", ""),
         "CONTACT_EMAIL": env("CONTACT_EMAIL", "mrbacco04@gmail.com"),
-        "MIN_AGE": int(env("MIN_AGE", 16)),                      # digital age of consent in Ireland
+        # ---- moderation before publication (docs/MODERATION.md); 0 switches a rule off ----
+        # starter blocked-word lists added ONCE, the first time the site starts (curated: it en es fr de pt ru; broad ones such as
+        # nl pl tr zh are opt-in on the admin page because they are noisier; "" = none)
+        "DEFAULT_WORD_LISTS": env("DEFAULT_WORD_LISTS", "en,it,es,fr,de,pt,ru"),
+        "NEW_MEMBER_HOLD_POSTS": int(env("NEW_MEMBER_HOLD_POSTS", 3)),    # a member's first posts wait for a check until this many were approved
+        "NEW_MEMBER_HOLD_HOURS": int(env("NEW_MEMBER_HOLD_HOURS", 24)),   # in a new account's first hours, anything with a link or photo waits
+        "REPORTS_AUTOHIDE": int(env("REPORTS_AUTOHIDE", 3)),              # this many different reporters hide a post or comment until checked
+        "MIN_AGE": int(env("MIN_AGE", 18)),                      # members must be adults (shown at sign-up, in terms and privacy)
 
         # ---- e-mail (verification, password reset) ----
         "SMTP_HOST": smtp_host,
@@ -117,6 +129,7 @@ def build():
         "TICKETMASTER_API_KEY": env("TICKETMASTER_API_KEY", ""),
         # other providers, each optional (see docs/EVENT-IMPORT.md for what they cover and their terms)
         "SKIDDLE_API_KEY": env("SKIDDLE_API_KEY", ""),         # UK and Ireland
+        "PREDICTHQ_API_KEY": env("PREDICTHQ_API_KEY", ""),     # worldwide; paid, with a free trial
         "SONGKICK_API_KEY": env("SONGKICK_API_KEY", ""),       # worldwide, but keys are given out by application only
         # worldwide gigs: the first search around a new place fetches that ~28 km area from the providers
         # (the rounded area is sent to them, never the exact position) and remembers it for IMPORT_COVERAGE_HOURS

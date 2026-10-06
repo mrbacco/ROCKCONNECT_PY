@@ -149,6 +149,8 @@ def test_feed_pagination(client):
 def test_send_json_and_poll_new_messages(client):
     bacco, rita = two_users(client)
     start(bacco, 2)
+    assert send_json(bacco, 1, "too early").status_code == 403          # a request: nothing can be sent before it is accepted
+    rita.post("/conversations/1/accept", data={"_csrf": csrf(rita, "/conversations/1")})
     r = send_json(bacco, 1, "live hello")
     assert r.status_code == 201 and r.json["message"]["mine"] is True
     first_id = r.json["message"]["id"]
@@ -173,7 +175,9 @@ def test_poll_is_private(client):
 def test_unread_badge_counts_then_clears_when_opened(client):
     bacco, rita = two_users(client)
     start(bacco, 2)
-    assert rita.get("/conversations/unread").json == {"count": 0}
+    assert rita.get("/conversations/unread").json == {"count": 1}   # the waiting request counts on the badge
+    rita.post("/conversations/1/accept", data={"_csrf": csrf(rita, "/conversations/1")})
+    assert rita.get("/conversations/unread").json == {"count": 0}   # answered, and no messages yet
     send_json(bacco, 1, "ping 1")
     send_json(bacco, 1, "ping 2")
     assert rita.get("/conversations/unread").json == {"count": 1}   # counts conversations, like Facebook

@@ -4,7 +4,7 @@
 """Import upcoming music events from outside services, so "gigs near you" works in any city.
 
 Providers (docs/EVENT-IMPORT.md has the terms of each): Ticketmaster (worldwide where they sell tickets),
-Skiddle (UK and Ireland), Songkick (worldwide, keys on application) and Bandsintown (a band's own page only).
+Skiddle (UK and Ireland), Songkick (worldwide, keys on application), PredictHQ (worldwide, paid with a trial) and Bandsintown (a band's own page only).
 
 Two ways events arrive:
   * ON DEMAND (default): when someone searches "near me" in a place nobody searched before, the rounded ~28 km
@@ -19,6 +19,7 @@ no longer lists, or that were not refreshed for IMPORT_MAX_AGE_HOURS are deleted
 """
 import json
 import math
+import secrets
 import threading
 import time
 import urllib.error
@@ -77,13 +78,14 @@ def parse_areas(text):
 
 # ------------------------------------------------------------------ talking to Ticketmaster
 KEY_SETTINGS = {"Ticketmaster": "TICKETMASTER_API_KEY", "Skiddle": "SKIDDLE_API_KEY", "Songkick": "SONGKICK_API_KEY",
-                "Bandsintown": "the app id of the band"}
+                "PredictHQ": "PREDICTHQ_API_KEY", "Bandsintown": "the app id of the band"}
 
 
-def _http_get_json(url, provider="Ticketmaster", timeout=20):
-    """GET a URL and parse the JSON. Errors never contain the URL: it holds the API key."""
+def _http_get_json(url, provider="Ticketmaster", timeout=20, headers=None):
+    """GET a URL and parse the JSON. Errors never contain the URL or headers: they hold the API key."""
     request = urllib.request.Request(url, headers={
-        "User-Agent": "rockconnect/1.0 (%s)" % current_app.config["CONTACT_EMAIL"], "Accept": "application/json"})
+        "User-Agent": "rockconnect/1.0 (%s)" % current_app.config["CONTACT_EMAIL"], "Accept": "application/json",
+        **(headers or {})})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
@@ -250,11 +252,17 @@ def _fetch_songkick(area, key, days, max_pages, stats, timeout):
                                     max_pages=max_pages * 2, stats=stats, timeout=timeout)
 
 
+def _fetch_predicthq(area, key, days, max_pages, stats, timeout):
+    return providers.fetch_predicthq(area, key, days, lambda *a, **k: _http_get_json(*a, **k),
+                                     max_pages=max_pages * 2, stats=stats, timeout=timeout)
+
+
 # searched in this order; when two list the same gig the first one wins (see api._remove_duplicates)
 PROVIDERS = {
     "ticketmaster": Provider("ticketmaster", "Ticketmaster", "TICKETMASTER_API_KEY", _fetch_ticketmaster),
     "skiddle": Provider("skiddle", "Skiddle", "SKIDDLE_API_KEY", _fetch_skiddle),
     "songkick": Provider("songkick", "Songkick", "SONGKICK_API_KEY", _fetch_songkick),
+    "predicthq": Provider("predicthq", "PredictHQ", "PREDICTHQ_API_KEY", _fetch_predicthq),
 }
 LABELS = {name: p.label for name, p in PROVIDERS.items()}
 LABELS["bandsintown"] = "Bandsintown"
@@ -324,6 +332,8 @@ def prune():
     removed = execute("DELETE FROM external_events WHERE event_at < :y OR seen_at < :s", y=yesterday, s=stale).rowcount
     execute("DELETE FROM import_coverage WHERE fetched_at < :s", s=stale)      # forgotten data must be fetched again
     commit()
+    from . import social    # imported here: social.py imports modules that import this one
+    social.prune_attendances()     # the small copies of imported gigs kept with "I am going"
     return removed or 0
 
 
@@ -518,6 +528,8 @@ def ensure_coverage(lat, lon, radius_km):
     cfg = current_app.config
     if not cfg["IMPORT_ON_DEMAND"]:
         return []
+    if secrets.randbelow(20) == 0:
+        prune()      # sites that only fetch on demand never run the scheduled import: clean up now and then
     clat, clon, cell = cell_for(lat, lon)
     radius = coverage_radius(radius_km)
     done = []
@@ -535,7 +547,7 @@ def ensure_coverage(lat, lon, radius_km):
             continue
         if result["truncated"]:
             _finish(provider.name, cell, "partial")
-            _complete_in_background(current_app._get_current_object(), provider, area)
+            _complete_in_background(current_app._get_current_object(), provider, area)  # type: ignore[attr-defined]
         else:
             _finish(provider.name, cell, "ok")
         done.append(provider.name)

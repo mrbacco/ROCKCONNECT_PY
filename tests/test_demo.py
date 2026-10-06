@@ -81,3 +81,18 @@ def test_deploy_files_exist_and_are_consistent():
     for needed in ("SECRET_KEY", "SITE_NAME", "SMTP_HOST", "DATABASE_URL", "S3_BUCKET", "TRUST_PROXY", "OPERATOR_NAME"):
         assert needed in documented, needed + " missing from .env.example"
     assert "app" in read("wsgi.py")
+
+
+def test_demo_has_the_social_side_and_its_pages_render(tmp_path):
+    app, _ = seeded(tmp_path)
+    assert scalar(app, "SELECT count(*) FROM attendances WHERE status = 'going'") == 3
+    assert scalar(app, "SELECT count(*) FROM follows") == 5 and scalar(app, "SELECT count(*) FROM gig_comments") == 3
+    assert scalar(app, "SELECT count(*) FROM user_instruments WHERE level IS NOT NULL") == 9
+    assert scalar(app, "SELECT min(length(birth_date)) FROM users") == 10
+    client = app.test_client()
+    signin(client, "riff_rita", "Demo-Pass-123")
+    post = scalar(app, "SELECT id FROM posts WHERE body LIKE 'Doors at 8%'")
+    page = client.get("/posts/%d" % post).get_data(as_text=True)
+    assert "Talk about this gig" in page and "two spare seats" in page and "Add to calendar" in page
+    for url in ("/notifications", "/gigs/mine", "/people?level=advanced", "/feed?following=1", "/gigs/mine.ics"):
+        assert client.get(url).status_code == 200, url

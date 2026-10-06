@@ -1,0 +1,77 @@
+{#
+  File: _going_panel.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-06
+#}
+{# "Who's going" box on a gig's page. Needs: panel (from social.panel) and next_url. #}
+{% from "_social_macros.html" import gig_actions, tag_chips with context %}
+{% from "_macros.html" import avatar, kind_badge %}
+<div class="card rc-card going-panel" id="going">
+  <div class="card-body">
+    <h5 class="mb-2">Who is going</h5>
+    {% if panel.over %}
+      <p class="text-muted small mb-2">This gig is over.</p>
+    {% else %}
+      {{ gig_actions(panel.gig.source, panel.gig.ref, panel.counts, next_url) }}
+      <a class="btn btn-ghost btn-sm mb-1" href="{{ url_for('ical.gig_file', source=panel.gig.source, ref=panel.gig.ref) }}">&#128197; Add to calendar</a>
+    {% endif %}
+
+    <form class="form-row going-filters mt-2" method="GET" action="{{ next_url.split('?')[0] }}#going">
+      <div class="col-sm-4 mb-2">
+        <select class="form-control form-control-sm" name="instrument" aria-label="Plays">
+          <option value="">Any instrument</option>
+          {% for key, label in panel.instruments.items() %}<option value="{{ key }}" {{ 'selected' if panel.filters.instrument == key }}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-4 mb-2">
+        <select class="form-control form-control-sm" name="level" aria-label="At least this good">
+          <option value="">Any level</option>
+          {% for key, label in panel.levels.items() %}<option value="{{ key }}" {{ 'selected' if panel.filters.level == key }}>At least {{ label|lower }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-4 mb-2">
+        <select class="form-control form-control-sm" name="genre" aria-label="Likes">
+          <option value="">Any genre</option>
+          {% for key, label in panel.genres.items() %}<option value="{{ key }}" {{ 'selected' if panel.filters.genre == key }}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-4 mb-2">
+        <select class="form-control form-control-sm" name="goal" aria-label="Looking for">
+          <option value="">Looking for anything</option>
+          {% for key, label in panel.goals.items() %}<option value="{{ key }}" {{ 'selected' if panel.filters.goal == key }}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-12"><button class="btn btn-outline-primary btn-sm" type="submit">Filter</button>
+        {% if panel.filters.instrument or panel.filters.genre or panel.filters.goal or panel.filters.level %}<a class="btn btn-link btn-sm" href="{{ next_url.split('?')[0] }}#going">Clear</a>{% endif %}</div>
+    </form>
+
+    <ul class="list-group list-group-flush mt-2">
+      {% for person in panel.people %}
+      <li class="list-group-item px-0">
+        <div class="d-flex align-items-center">
+          {{ avatar(person.username, person.id) }}
+          <div class="ml-2 flex-grow-1">
+            <a class="author" href="{{ url_for('views.profile', user_id=person.id) }}">{{ person.name }}</a>
+            {{ kind_badge(person.kind) }}
+            <span class="small text-muted">@{{ person.username }}{% if person.location %} &middot; {{ person.location }}{% endif %}
+              &middot; {{ person.status }}</span>
+            {% if person.following %}<span class="chip chip-goal">you follow</span>{% endif %}
+          </div>
+          <form method="POST" action="{{ url_for('conversations.start', user_id=person.id) }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <button class="btn btn-outline-primary btn-sm" type="submit">Ask to chat</button>
+          </form>
+        </div>
+        <div class="mt-1 chips">{{ tag_chips(person, panel.instruments, panel.genres, panel.goals) }}</div>
+      </li>
+      {% else %}
+      <li class="list-group-item px-0 text-muted small">
+        {% if panel.filters.instrument or panel.filters.genre or panel.filters.goal or panel.filters.level %}Nobody going matches those filters.
+        {% else %}Nobody has said they are going yet. Be the first!{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="small text-muted mt-2 mb-0">Only members who chose to show their plans are listed. You can keep your name private on any gig,
+      or hide all your plans in <a href="{{ url_for('views.edit') }}">Edit profile</a>.</p>
+  </div>
+</div>

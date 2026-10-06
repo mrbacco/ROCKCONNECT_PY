@@ -37,6 +37,7 @@
       </form>
       {% endif %}
     </div></div>
+    {% if panel %}{% set next_url = request.full_path.rstrip('?') %}{% include "_going_panel.html" %}{% include "_gig_talk.html" %}{% endif %}
     <a class="btn btn-ghost btn-block mb-3" href="{{ url_for('feed.gigs') }}">&larr; Back to the gig board</a>
   </div>
 </div>

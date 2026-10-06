@@ -1,0 +1,42 @@
+{#
+  File: _social_macros.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-06
+#}
+{# Going / Interested buttons with the counts. st = {"going": n, "interested": n, "mine": status or None, "visible": bool} #}
+{% macro gig_actions(source, ref, st, next_url) -%}
+{% set st = st or {"going": 0, "interested": 0, "mine": None, "visible": True} %}
+<div class="gig-actions d-flex flex-wrap align-items-center">
+  <form class="mr-2 mb-1" method="POST" action="{{ url_for('social.attendance') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="source" value="{{ source }}">
+    <input type="hidden" name="ref" value="{{ ref }}">
+    <input type="hidden" name="next" value="{{ next_url }}">
+    <button class="btn btn-sm {{ 'btn-primary' if st.mine == 'going' else 'btn-outline-primary' }}" type="submit"
+            name="status" value="{{ 'none' if st.mine == 'going' else 'going' }}"
+            title="{{ 'Click again to cancel' if st.mine == 'going' else 'Let other members know you are going' }}">&#10003; Going</button>
+    <button class="btn btn-sm {{ 'btn-primary' if st.mine == 'interested' else 'btn-outline-dark' }}" type="submit"
+            name="status" value="{{ 'none' if st.mine == 'interested' else 'interested' }}">&#9733; Interested</button>
+  </form>
+  <span class="small text-muted mb-1">{{ st.going }} going &middot; {{ st.interested }} interested{% if st.friends_going %}
+    &middot; <strong class="text-amber">{{ st.friends_going }} you follow</strong>{% endif %}</span>
+  {% if st.mine %}
+  <form class="ml-2 mb-1" method="POST" action="{{ url_for('social.attendance') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="source" value="{{ source }}">
+    <input type="hidden" name="ref" value="{{ ref }}">
+    <input type="hidden" name="next" value="{{ next_url }}">
+    <button class="btn btn-link btn-sm p-0 small" type="submit" name="visible" value="{{ 0 if st.visible else 1 }}"
+            title="Private means you are counted, but your name is not listed">
+      {{ 'Hide my name' if st.visible else 'Show my name' }}</button>
+  </form>
+  {% endif %}
+</div>
+{%- endmacro %}
+
+{# a member's instruments, genres and goals as little labels #}
+{% macro tag_chips(tags, instruments, genres, goals) -%}
+{% for key in tags.instruments %}{% set level = (tags.instrument_levels or {}).get(key) %}<span class="chip chip-instrument">{{ instruments.get(key, key) }}{% if level %} &middot; {{ level_labels.get(level, level) }}{% endif %}</span>{% endfor %}
+{% for key in tags.genres %}<span class="chip chip-genre">{{ genres.get(key, key) }}</span>{% endfor %}
+{% for key in tags.goals %}<span class="chip chip-goal">{{ goals.get(key, key) }}</span>{% endfor %}
+{%- endmacro %}

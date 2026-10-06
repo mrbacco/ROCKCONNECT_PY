@@ -14,6 +14,9 @@ below needs a rewrite: the web app stays, the app is a second client of the same
   customer's branding and switch features on and off (white-label).
 * **One uniform shape** for every gig whatever its source (members' or imported), so the app has one parser.
 * **Privacy by design for location**: the app sends a position rounded to about 1 km, nothing is stored or logged.
+* **The social side in the API**: going, who is going, people search with skill levels, follows, a notifications list (the
+  bell), the gig discussion, and `.ics` calendar files ([API.md](API.md), [SOCIAL.md](SOCIAL.md)). The app must handle
+  `403 age_required` (an older account that has not given a date of birth yet).
 * **Plain HTTPS + JSON** and `Cache-Control: no-store` on location-dependent answers.
 
 ## To do before the app can ship
@@ -24,7 +27,8 @@ below needs a rewrite: the web app stays, the app is a second client of the same
 2. **The rest of the API**: feed (list, post with photo upload, like, comment, delete), profile and edit, people
    search, chat (list, send, poll or push), report and block, account (export, delete). The web views already hold the
    logic; each needs a JSON twin under `/api/v1`.
-3. **Push notifications** (Firebase Cloud Messaging) instead of polling: new chat message, a gig announced near me.
+3. **Push notifications** (Firebase Cloud Messaging) instead of polling: new chat message, a gig announced near me, and the
+   `notifications` the site already creates (new follower, "a friend is going"): send a push whenever `notifications.notify` writes one.
    Needs a `devices` table (token, platform, member) and a sender.
 4. **Deep links**: `/posts/<id>` and `/events/<id>` already exist as stable addresses to open in the app.
 5. **Google Play requirements**: a privacy policy URL (the site already has one, `/privacy`), the Data Safety form

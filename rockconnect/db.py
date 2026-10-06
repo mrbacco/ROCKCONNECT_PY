@@ -49,6 +49,9 @@ users = Table(
     # a band can connect its OWN Bandsintown artist page (their terms: for artists, one app id per artist)
     Column("bandsintown_artist", String(120)),
     Column("bandsintown_app_id", String(64)),                               # secret: never shown, logged or exported
+    Column("hide_plans", Integer, nullable=False, server_default="0"),      # 1 = never show which gigs I am going to
+    Column("birth_date", String(10)),                                       # "YYYY-MM-DD", only used to check the age: never shown
+    Column("notify_friends_going", Integer, nullable=False, server_default="1"),   # tell me when people I follow go to a gig
 )
 
 # one conversation per pair of users; ids are stored low < high so the pair is unique
@@ -58,6 +61,9 @@ conversations = Table(
     Column("user_low_id", Integer, ForeignKey("users.id"), nullable=False),
     Column("user_high_id", Integer, ForeignKey("users.id"), nullable=False),
     Column("created_at", String(19), nullable=False),  # UTC "YYYY-MM-DD HH:MM:SS"
+    # a first message to someone new is a REQUEST the other person accepts (or declines) before it becomes a chat
+    Column("status", String(10), nullable=False, server_default="accepted"),   # accepted | pending | declined
+    Column("initiator_id", Integer),                    # who sent the request (NULL for chats from before requests)
     UniqueConstraint("user_low_id", "user_high_id", name="uq_conversation_pair"),
     CheckConstraint("user_low_id < user_high_id", name="ck_conversation_order"),
 )
@@ -92,6 +98,8 @@ posts = Table(
     Column("event_place", String(120)),              # where the gig is
     Column("latitude", Float, index=True),           # where the gig is on the map (for "gigs near me")
     Column("longitude", Float),
+    Column("genre", String(30)),                     # one of taxonomy.GENRES, for gigs announced by members
+    Column("mod_state", String(8), nullable=False, server_default="ok"),   # ok | held (waiting for a check) | hidden (reported)
 )
 
 comments = Table(
@@ -101,6 +109,7 @@ comments = Table(
     Column("user_id", Integer, ForeignKey("users.id"), nullable=False),
     Column("body", Text, nullable=False),
     Column("created_at", String(19), nullable=False),
+    Column("mod_state", String(8), nullable=False, server_default="ok"),   # ok | held | hidden
 )
 
 # composite primary key = one like per user per post, enforced by the database
@@ -214,6 +223,86 @@ hidden_events = Table(
     UniqueConstraint("source", "external_id", name="uq_hidden_event"),
 )
 
+# --- social: who is going to which gig, and what people play / like / look for ---
+# a snapshot of the gig is kept with the RSVP because imported events are deleted when stale (providers only allow
+# short-term storage); the snapshots of imported gigs are removed a day after the gig (see social.prune_attendances)
+attendances = Table(
+    "attendances", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("user_id", Integer, ForeignKey("users.id"), nullable=False, index=True),
+    Column("source", String(20), nullable=False),             # community | ticketmaster | skiddle | ...
+    Column("event_ref", String(64), nullable=False),          # post id (community) or the provider's own id
+    Column("status", String(10), nullable=False),             # going | interested
+    Column("visible", Integer, nullable=False, server_default="1"),   # 0 = counted, but not listed by name
+    Column("title", String(255), nullable=False),
+    Column("venue", String(160), nullable=False, server_default=""),
+    Column("city", String(120), nullable=False, server_default=""),
+    Column("event_at", String(16), nullable=False, index=True),
+    Column("latitude", Float),
+    Column("longitude", Float),
+    Column("genre", String(30)),
+    Column("created_at", String(19), nullable=False),
+    UniqueConstraint("user_id", "source", "event_ref", name="uq_attendance"),
+)
+
+user_instruments = Table(
+    "user_instruments", metadata,
+    Column("user_id", Integer, ForeignKey("users.id"), primary_key=True),
+    Column("instrument", String(30), primary_key=True, index=True),   # one of taxonomy.INSTRUMENTS
+    Column("level", String(12)),                                      # one of taxonomy.LEVELS, or NULL = not said
+)
+
+user_genres = Table(
+    "user_genres", metadata,
+    Column("user_id", Integer, ForeignKey("users.id"), primary_key=True),
+    Column("genre", String(30), primary_key=True, index=True),        # one of taxonomy.GENRES
+)
+
+user_goals = Table(
+    "user_goals", metadata,
+    Column("user_id", Integer, ForeignKey("users.id"), primary_key=True),
+    Column("goal", String(30), primary_key=True, index=True),         # one of taxonomy.GOALS
+)
+
+# --- follows: A follows B (no approval needed, like the plans themselves they are visible to members) ---
+follows = Table(
+    "follows", metadata,
+    Column("follower_id", Integer, ForeignKey("users.id"), primary_key=True),
+    Column("followed_id", Integer, ForeignKey("users.id"), primary_key=True, index=True),
+    Column("created_at", String(19), nullable=False),
+)
+
+# --- notifications shown in the app (the bell); a push channel for the Android app can read the same rows ---
+notifications = Table(
+    "notifications", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("user_id", Integer, ForeignKey("users.id"), nullable=False, index=True),
+    Column("kind", String(20), nullable=False),               # follow | friend_going
+    Column("text", String(255), nullable=False),
+    Column("url", String(255)),
+    Column("dedupe_key", String(120), nullable=False),        # the same event never notifies the same person twice
+    Column("created_at", String(19), nullable=False),
+    Column("read_at", String(19)),
+    UniqueConstraint("user_id", "dedupe_key", name="uq_notification"),
+)
+
+# --- the discussion under a gig. Like an RSVP it keeps a snapshot of the gig, so the thread can be found from every
+# listing of the same concert and survives until the gig is long over ---
+gig_comments = Table(
+    "gig_comments", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("user_id", Integer, ForeignKey("users.id"), nullable=False, index=True),
+    Column("source", String(20), nullable=False),
+    Column("event_ref", String(64), nullable=False),
+    Column("title", String(255), nullable=False),
+    Column("event_at", String(16), nullable=False, index=True),
+    Column("latitude", Float),
+    Column("longitude", Float),
+    Column("body", Text, nullable=False),
+    Column("created_at", String(19), nullable=False),
+    Column("mod_state", String(8), nullable=False, server_default="ok"),   # ok | held | hidden
+)
+
 # --- which parts of the world were fetched from which provider, and when (on-demand import) ---
 import_coverage = Table(
     "import_coverage", metadata,
@@ -290,6 +379,8 @@ def init_db():
     from .migrate import upgrade
     upgrade(get_engine())
     bac_log("db", "schema ready (tables: %s)" % ", ".join(metadata.tables))
+    from . import review      # imported here: review.py imports this module
+    review.seed_default_lists()
 
 
 @click.command("db-upgrade")
@@ -320,3 +411,28 @@ def init_app(app):
         # several workers run `flask db-upgrade` once before them and set AUTO_MIGRATE=0.
         with app.app_context():
             init_db()
+
+# content waiting for a moderator: held by the filter / the new-member rules, or hidden after reports
+review_items = Table(
+    "review_items", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("target_type", String(12), nullable=False),    # post | comment | gigcomment
+    Column("target_id", Integer, nullable=False),
+    Column("author_id", Integer, ForeignKey("users.id"), index=True),
+    Column("reason", String(160), nullable=False),        # why it is waiting (shown to moderators only)
+    Column("snapshot", Text, nullable=False, server_default=""),
+    Column("status", String(10), nullable=False, server_default="open", index=True),   # open | closed
+    Column("resolution", String(12)),                     # approved | removed | removed_banned | gone
+    Column("resolved_by", Integer),
+    Column("resolved_at", String(19)),
+    Column("created_at", String(19), nullable=False),
+)
+
+# words and phrases that send a post or comment to the review queue (edited by admins)
+blocked_words = Table(
+    "blocked_words", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("word", String(80), nullable=False, unique=True),
+    Column("created_by", Integer),
+    Column("created_at", String(19), nullable=False),
+)

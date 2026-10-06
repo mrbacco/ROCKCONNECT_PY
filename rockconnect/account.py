@@ -7,14 +7,14 @@ import json
 import tempfile
 import zipfile
 
-from flask import (Blueprint, flash, g, redirect, render_template, request, send_file,
-                   session, url_for)
+from flask import (Blueprint, current_app, flash, g, redirect, render_template, request,
+                   send_file, session, url_for)
 
-from . import ratelimit, session_store, storage
+from . import ages, ratelimit, session_store, social, storage
 from .auth import check_password, hash_password, login_required, password_error
 from .baclog import bac_log
 from .db import commit, execute
-from .util import now_str
+from .util import now_str, safe_next
 
 bp = Blueprint("account", __name__, url_prefix="/account")
 
@@ -39,13 +39,23 @@ def delete_account_data(user_id):
         "DELETE FROM sessions WHERE user_id = :u",
         "DELETE FROM email_tokens WHERE user_id = :u",
         "DELETE FROM external_events WHERE user_id = :u",
+        "DELETE FROM attendances WHERE user_id = :u",
+        "DELETE FROM follows WHERE follower_id = :u OR followed_id = :u",
+        "DELETE FROM notifications WHERE user_id = :u",
+        # what they caused in other members' lists ("X started following you", "X is going to ..."): the keys end in their id
+        "DELETE FROM notifications WHERE dedupe_key = :follow_key OR dedupe_key LIKE :going_key",
+        "DELETE FROM gig_comments WHERE user_id = :u",
+        "DELETE FROM user_instruments WHERE user_id = :u",
+        "DELETE FROM user_genres WHERE user_id = :u",
+        "DELETE FROM user_goals WHERE user_id = :u",
+        "DELETE FROM review_items WHERE author_id = :u",
         "DELETE FROM reports WHERE reporter_id = :u",
         # reports about their content keep no copy of it: the case is closed, nobody is identified
         "UPDATE reports SET snapshot = '', details = '', target_user_id = NULL, status = 'closed',"
         " resolution = 'author_deleted' WHERE target_user_id = :u",
         "DELETE FROM users WHERE id = :u",
     ):
-        execute(sql, u=user_id)
+        execute(sql, u=user_id, follow_key="follow:%d" % user_id, going_key="going:%d:%%" % user_id)
     commit()
     for name in photos:  # after the commit: if the database step failed, no photo is lost
         try:
@@ -61,6 +71,38 @@ def settings():
     blocked = execute("SELECT u.id, u.username, u.name FROM blocks b JOIN users u ON u.id = b.blocked_id"
                       " WHERE b.blocker_id = :me ORDER BY u.username", me=g.user["id"]).mappings().fetchall()
     return render_template("account.html", blocked=blocked)
+
+
+@bp.route("/confirm-age", methods=("GET", "POST"))
+@login_required
+def confirm_age():
+    """Ask once for the date of birth. Set once, it cannot be changed here. Under the minimum age: the account is closed."""
+    if g.user["birth_date"] is not None:
+        return redirect(url_for("feed.index"))
+    nxt = safe_next(request.values.get("next"), url_for("feed.index"))
+    if request.method == "POST":
+        text = request.form.get("birth_date", "").strip()
+        problem = ages.error_for(text)
+        if problem and ages.parse_birth_date(text) is not None:
+            # a real date, but too young: this installation does not allow the account
+            execute("UPDATE users SET birth_date = :b, status = 'banned', ban_reason = :r WHERE id = :id",
+                    b=text, r="Below the minimum age", id=g.user["id"])
+            session_store.destroy_all(g.user["id"])
+            commit()
+            bac_log("account", "user id=%s is below the minimum age -> closed" % g.user["id"])
+            session.clear()
+            flash("Sorry, members must be at least %d years old, so this account has been closed. "
+                  "Write to %s if you want your data erased." % (current_app.config["MIN_AGE"],
+                                                               current_app.config["CONTACT_EMAIL"]), "danger")
+            return redirect(url_for("auth.signin"))
+        if problem:
+            flash(problem, "danger")
+        else:
+            execute("UPDATE users SET birth_date = :b WHERE id = :id AND birth_date IS NULL", b=text, id=g.user["id"])
+            commit()
+            flash("Thank you. Your date of birth is only used to check your age and is never shown.", "success")
+            return redirect(nxt)
+    return render_template("confirm_age.html", next_url=nxt)
 
 
 @bp.route("/signout-everywhere", methods=("POST",))
@@ -110,8 +152,9 @@ def build_export(user):
     data = {
         "exported_at_utc": now_str(),
         "profile": {k: user[k] for k in ("username", "name", "email", "about", "kind", "location",
-                                           "website", "created_at", "terms_accepted_at")}
-                   | {"email_confirmed": bool(user["email_verified"])},
+                                           "website", "created_at", "terms_accepted_at", "birth_date")}
+                   | {"email_confirmed": bool(user["email_verified"]), "hide_gig_plans": bool(user["hide_plans"]),
+                                                           "notify_friends_going": bool(user["notify_friends_going"])},
         "posts": [{**p, "photo": "photos/" + p["image_filename"] if p["image_filename"] else None}
                   for p in posts],
         "comments": rows("SELECT id, post_id, body, created_at FROM comments WHERE user_id = :u ORDER BY id"),
@@ -121,6 +164,15 @@ def build_export(user):
             " JOIN conversations c ON c.id = m.conversation_id"
             " JOIN users o ON o.id = CASE WHEN c.user_low_id = :u THEN c.user_high_id ELSE c.user_low_id END"
             " WHERE m.sender_id = :u ORDER BY m.id"),
+        "interests": social.user_tags(uid),
+        "following": [r["username"] for r in rows(
+            "SELECT u.username FROM follows f JOIN users u ON u.id = f.followed_id WHERE f.follower_id = :u")],
+        "followers": [r["username"] for r in rows(
+            "SELECT u.username FROM follows f JOIN users u ON u.id = f.follower_id WHERE f.followed_id = :u")],
+        "gig_comments": rows("SELECT source, event_ref, title, event_at, body, created_at FROM gig_comments"
+                             " WHERE user_id = :u ORDER BY id"),
+        "gig_plans": rows("SELECT source, event_ref, status, visible, title, venue, city, event_at, created_at"
+                          " FROM attendances WHERE user_id = :u ORDER BY event_at"),
         "blocked_members": [r["username"] for r in rows(
             "SELECT u.username FROM blocks b JOIN users u ON u.id = b.blocked_id WHERE b.blocker_id = :u")],
         "reports_filed": rows("SELECT target_type, target_id, reason, details, status, created_at"

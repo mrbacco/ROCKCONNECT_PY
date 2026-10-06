@@ -1,0 +1,47 @@
+{#
+  File: _gig_talk.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-06
+#}
+{# The discussion under a gig. Needs: panel (from social.panel) and next_url. #}
+{% from "_macros.html" import avatar, kind_badge %}
+<div class="card rc-card" id="talk">
+  <div class="card-body">
+    <h5 class="mb-2">Talk about this gig</h5>
+    {% for c in panel.comments %}
+    <div class="d-flex mt-2 comment">
+      {{ avatar(c.author.username, c.author.id, 'sm') }}
+      <div class="ml-2 flex-grow-1">
+        <div class="comment-bubble">
+          <a class="author" href="{{ url_for('views.profile', user_id=c.author.id) }}">{{ c.author.name }}</a>
+          {{ kind_badge(c.author.kind) }}
+          <span class="post-body">{{ c.body }}</span>
+        </div>
+        <span class="text-muted small ml-2" title="{{ c.created_at }} UTC">{{ c.created_at|timeago }}</span>
+        {% if c.pending %}<span class="chip chip-instrument ml-1">waiting for a check &middot; only you see this</span>{% endif %}
+        {% if c.mine or g.user['role'] == 'admin' %}
+        <form class="d-inline" method="POST" action="{{ url_for('gigtalk.delete', comment_id=c.id) }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <input type="hidden" name="next" value="{{ next_url }}">
+          <button class="btn btn-link btn-sm p-0 ml-1 text-muted small" type="submit">Delete</button>
+        </form>
+        {% endif %}
+        {% if not c.mine %}
+        <a class="small text-muted ml-1" href="{{ url_for('moderation.report', target_type='gigcomment', target_id=c.id, next=next_url) }}">Report</a>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <p class="text-muted small mb-2">No messages yet. Ask who has a spare ticket, or who is driving.</p>
+    {% endfor %}
+    <form class="d-flex mt-3" method="POST" action="{{ url_for('gigtalk.comment') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="source" value="{{ panel.gig.source }}">
+      <input type="hidden" name="ref" value="{{ panel.gig.ref }}">
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <input class="form-control form-control-sm" type="text" name="body" maxlength="1000" autocomplete="off"
+             placeholder="Write to everyone interested in this gig..." aria-label="Write a message about this gig" required>
+      <button class="btn btn-primary btn-sm ml-2" type="submit">Post</button>
+    </form>
+  </div>
+</div>

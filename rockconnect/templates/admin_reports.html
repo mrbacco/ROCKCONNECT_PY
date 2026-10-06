@@ -31,8 +31,10 @@
     {% if r['target_type'] != 'user' %}
     <button class="btn btn-outline-primary btn-sm ml-2" name="action" value="remove" type="submit">Remove content</button>
     {% endif %}
+    {% if is_admin %}
     <button class="btn btn-outline-danger btn-sm ml-2" name="action" value="remove_ban" type="submit">
       {{ 'Remove and suspend author' if r['target_type'] != 'user' else 'Suspend member' }}</button>
+    {% endif %}
   </form>
   {% else %}
   <p class="small text-muted mb-0">Closed: {{ r['resolution'] }} {{ (r['resolved_at'] or '')|timeago }}</p>

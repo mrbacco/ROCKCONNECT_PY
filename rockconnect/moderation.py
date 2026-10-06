@@ -9,7 +9,7 @@ the other's posts or comments, and they cannot message each other.
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
 from sqlalchemy.exc import IntegrityError
 
-from . import ratelimit
+from . import ratelimit, review
 from .auth import login_required
 from .baclog import bac_log
 from .db import commit, execute, insert, reports, rollback
@@ -23,7 +23,7 @@ REASONS = {
     "illegal": "Illegal content",
     "other": "Something else",
 }
-TARGET_TYPES = ("post", "comment", "user")
+TARGET_TYPES = ("post", "comment", "user", "gigcomment")
 
 
 def find_target(target_type, target_id):
@@ -35,6 +35,9 @@ def find_target(target_type, target_id):
     if target_type == "comment":
         row = execute("SELECT user_id, body FROM comments WHERE id = :id", id=target_id).fetchone()
         return None if row is None else (row[0], row[1], "comment #%d" % target_id)
+    if target_type == "gigcomment":
+        row = execute("SELECT user_id, body FROM gig_comments WHERE id = :id", id=target_id).fetchone()
+        return None if row is None else (row[0], row[1], "gig comment #%d" % target_id)
     if target_type == "user":
         row = execute("SELECT id, about FROM users WHERE id = :id", id=target_id).fetchone()
         return None if row is None else (row[0], row[1], "profile #%d" % target_id)
@@ -68,6 +71,7 @@ def report(target_type, target_id):
                        status="open", created_at=now_str())
                 commit()
                 bac_log("report", "user id=%s reported %s (reason=%s)" % (g.user["id"], label, reason))
+                review.maybe_autohide(target_type, target_id)
             flash("Thank you. Our moderators will look at it.", "success")
             return redirect(next_url)
     return render_template("report.html", target_type=target_type, target_id=target_id, label=label,
@@ -86,6 +90,9 @@ def block(user_id):
         try:
             execute("INSERT INTO blocks (blocker_id, blocked_id, created_at) VALUES (:a, :b, :now)",
                     a=me, b=user_id, now=now_str())
+            commit()
+            execute("DELETE FROM follows WHERE (follower_id = :a AND followed_id = :b) OR (follower_id = :b AND followed_id = :a)",
+                    a=me, b=user_id)
             commit()
             bac_log("block", "user id=%s blocked id=%s" % (me, user_id))
         except IntegrityError:

@@ -1,0 +1,58 @@
+{#
+  File: admin_words.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-06
+#}
+{% extends "layout.html" %}
+{% block title %}Blocked words - {{ site.name }}{% endblock %}
+{% block content %}
+{% include "_admin_nav.html" %}
+<p class="text-muted">A post, comment or gig comment containing one of these words or phrases is held in the
+  <a href="{{ url_for('admin.review_queue') }}">review queue</a> instead of being shown. It works in <strong>any language</strong>:
+  write the word or phrase as people write it. Matching ignores capitals and accents, finds whole words only (so "ass" does not
+  catch "class"), and sees through repeated letters ("porcaaa"), digits for letters ("p0rca") and dashes between the words of a phrase.
+  The author is told it waits for a check, not which word. Admins and moderators are never held. Up to {{ limit }} entries.</p>
+{% if not words %}
+<div class="alert alert-warning" role="alert"><strong>The list is empty, so nothing is being filtered.</strong>
+  Add a starter list below, or your own words.</div>
+{% endif %}
+<div class="alert alert-info small" role="note">Testing? Admins and moderators are <strong>never held</strong>, so try it with an
+  ordinary member account (a second browser or a private window).</div>
+<div class="card rc-card"><div class="card-body">
+  <h5 class="mb-1">Add a starter list</h5>
+  <p class="text-muted small">Common profanity, insults and blasphemy in one language. Nothing is switched on until you add it, and every
+    entry can be removed afterwards. Read it first: what is offensive depends on your community.</p>
+  {% for group in ('curated', 'broad') %}
+  <p class="small mb-1 mt-2"><strong>{{ 'Written for this site' if group == 'curated' else 'Broad lists for more languages' }}</strong>
+    {% if group == 'broad' %}<span class="text-muted">&middot; open lists leaning towards sexual vocabulary: expect false matches and gaps, and
+      read them before adding. Languages that add endings to words (Turkish, Finnish...) match only the listed forms.</span>{% endif %}</p>
+  {% for code, name, new, kind in packs if kind == group %}
+  <form class="d-inline-block mr-2 mb-2" method="POST" action="{{ url_for('admin.words_starter') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="lang" value="{{ code }}">
+    <button class="btn btn-outline-primary btn-sm" type="submit" {{ 'disabled' if not new }}>{{ name }}{% if new %} (+{{ new }}){% else %} &#10003;{% endif %}</button>
+  </form>
+  {% endfor %}
+  {% endfor %}
+  <p class="small text-muted mt-2 mb-0">Broad lists: <a href="https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words"
+    target="_blank" rel="noopener nofollow">LDNOOBW</a>, licence CC BY 4.0.</p>
+</div></div>
+<div class="card rc-card"><div class="card-body">
+  <form class="form-inline" method="POST" action="{{ url_for('admin.words') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <input class="form-control mr-2" type="text" name="word" maxlength="80" placeholder="a word or phrase" aria-label="Word or phrase" required>
+    <button class="btn btn-primary" type="submit">Add</button>
+  </form>
+</div></div>
+<div class="card rc-card"><div class="card-body">
+  {% for w in words %}
+  <form class="d-inline-block mr-2 mb-2" method="POST" action="{{ url_for('admin.words_delete', word_id=w['id']) }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <span class="chip chip-genre">{{ w['word'] }}
+      <button class="btn btn-link btn-sm p-0 ml-1" type="submit" title="Remove {{ w['word'] }}" aria-label="Remove {{ w['word'] }}">&#10005;</button></span>
+  </form>
+  {% else %}
+  <span class="text-muted">The list is empty.</span>
+  {% endfor %}
+</div></div>
+{% endblock %}

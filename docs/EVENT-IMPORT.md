@@ -29,10 +29,11 @@ So **every city in the world works as soon as a provider covers it**; you do not
 | **Ticketmaster** | US, Canada, Mexico, UK, Ireland, Germany, Spain, Netherlands, Nordics, Australia, NZ, South Africa and more. **Not France, Japan, India** (we saw 0 results in Paris, Tokyo, Mumbai) | free, instant: [developer.ticketmaster.com](https://developer.ticketmaster.com) | `TICKETMASTER_API_KEY` |
 | **Skiddle** | UK and Ireland (strong for clubs and small gigs) | free, apply at skiddle.com/api/join.php | `SKIDDLE_API_KEY` |
 | **Songkick** | Worldwide, including the places Ticketmaster misses | **by application only** (songkick.com/api_key_requests/new); they approve few new projects | `SONGKICK_API_KEY` |
+| **PredictHQ** | Worldwide. Event data rather than a ticket shop: concerts with venue, date and place, but **no ticket links**. Only events with a named venue are used | paid, with a free trial: [predicthq.com](https://www.predicthq.com) | `PREDICTHQ_API_KEY` |
 | **Bandsintown** | One artist at a time. **No search by place** | each artist's *own* app id | a band connects itself in its profile, see below |
 
 Verified against the live service: Ticketmaster (London, New York, Toronto, Dublin, Berlin, Sydney, Mexico City, Sao Paulo, Nairobi
-return real gigs). **Skiddle and Songkick were written from their public documentation but not run against the live services**
+return real gigs). **Skiddle, Songkick and PredictHQ were written from their public documentation but not run against the live services**
 (no keys available while building); their answer formats are read leniently, and `flask --app wsgi doctor --online` tells you
 at once if a key works and whether events could be read. If you get a key, please run it and report what it says.
 
@@ -45,12 +46,33 @@ Where no provider has listings, an admin who searches there sees why in the pane
    TICKETMASTER_API_KEY=your-key
    SKIDDLE_API_KEY=your-key          # optional, UK/Ireland
    SONGKICK_API_KEY=your-key         # optional, worldwide, when approved
+   PREDICTHQ_API_KEY=your-token      # optional, worldwide, paid (free trial)
    ```
    `python run.py` and `flask --app wsgi ...` read `.env` by themselves. Restart after changing it.
 2. `flask --app wsgi doctor --online` checks every key with one request each.
 3. Done. Search for a gig in any city. Optional: keep favourite places always fresh from cron with
    `IMPORT_AREAS=London=51.5072,-0.1276,40;Dublin=53.3498,-6.2603,30` and `flask --app wsgi import-events`
    (`--provider skiddle`, `--area London`, `--dry-run` narrow it). The command exits with an error code when something failed.
+
+## How to get each key (Songkick, PredictHQ, Bandsintown)
+**Songkick** (site-wide key, worldwide)
+1. Apply at [songkick.com/api_key_requests/new](https://www.songkick.com/api_key_requests/new): describe the site, say it is non-commercial or what the use is, and
+   link it. They approve few new projects and answer slowly; there is no instant key.
+2. When you get the key, put `SONGKICK_API_KEY=...` in `.env`, restart, run `flask --app wsgi doctor --online`.
+
+**PredictHQ** (site-wide token, worldwide)
+1. Create an account at [predicthq.com](https://www.predicthq.com) (there is a free trial), then create an **access token** in the
+   account's API / developer section.
+2. Put `PREDICTHQ_API_KEY=...` in `.env`, restart, run `flask --app wsgi doctor --online`. It is sent as a bearer token, never in the address.
+3. Their free trial is for evaluation; a live commercial site needs a paid plan, so check their terms first. It lists
+   concerts without ticket links, so members see the gig but not a "Get tickets" button; where Ticketmaster or Skiddle list the
+   same concert, theirs wins and PredictHQ's copy is dropped.
+
+**Bandsintown** (no site-wide key, on purpose)
+1. Each **band** asks Bandsintown for its own app id (it is for the artist or someone acting for them; commercial use needs their
+   written approval: see below).
+2. The band opens *Edit profile*, enters its Bandsintown artist name and app id, and its dates appear as its gigs.
+There is nothing for you to put in `.env`.
 
 ## Bands and Bandsintown
 

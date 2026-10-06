@@ -11,11 +11,11 @@ import struct
 import zlib
 from datetime import datetime, timedelta, timezone
 
-from . import storage
+from . import social, storage
 from .auth import hash_password
 from .baclog import bac_log
-from .db import (commit, comments, conversations, execute, geocache, insert, likes, messages, posts,
-                 users)
+from .db import (attendances, commit, comments, conversations, execute, follows, geocache, gig_comments, insert,
+                 likes, messages, posts, users)
 from .util import now_str
 
 # (username, name, kind, location, website, about)
@@ -95,7 +95,7 @@ def seed(password):
     for username, name, kind, location, website, about in PEOPLE:
         ids[username] = insert(
             users, username=username, name=name, email=username + "@example.com", password=pw_hash,
-            about=about, kind=kind, location=location, website=website or None, email_verified=1,
+            about=about, kind=kind, location=location, website=website or None, email_verified=1, birth_date="1990-01-01",
             terms_accepted_at=now_str(), created_at=stamp(days=30))
 
     def gig(days, hour=20):
@@ -160,6 +160,29 @@ def seed(password):
         (2860, "the_hollow_kings", "Deal. We will bring Neon Riot as support."),
     ):
         insert(messages, conversation_id=chat, sender_id=ids[sender], body=text, created_at=stamp(minutes=minutes_ago))
+    # the social side: what they play, who is going to Friday's gig, who follows whom, and the talk under the gig
+    for username, instruments, genres, goals in (
+            ("riff_rita", {}, ["rock", "punk"], ["gig_buddies", "lift"]),
+            ("sam_sixstring", {"guitar": "intermediate", "bass": "beginner"}, ["rock", "indie_alternative"], ["gig_buddies", "jam"]),
+            ("dee_drums", {"drums": "advanced"}, ["rock", "metal", "punk"], ["jam", "bandmates"]),
+            ("the_hollow_kings", {"guitar": "pro", "bass": "pro", "drums": "pro", "vocals": "advanced"}, ["rock"], []),
+            ("neon_riot", {"synth": "advanced", "vocals": "intermediate"}, ["punk", "electronic"], ["bandmates"])):
+        social.save_tags(ids[username], instruments, genres, goals)
+    friday = execute("SELECT event_at FROM posts WHERE id = :i", i=post_ids[0]).scalar()
+    for username, status in (("riff_rita", "going"), ("sam_sixstring", "going"), ("dee_drums", "interested"),
+                             ("neon_riot", "going")):
+        insert(attendances, user_id=ids[username], source="community", event_ref=str(post_ids[0]), status=status, visible=1,
+               title="The Hollow Kings", venue="The Basement Bar, Galway", city="", event_at=friday, latitude=53.2744,
+               longitude=-9.0491, genre=None, created_at=stamp(minutes=40))
+    for follower, followed in (("riff_rita", "the_hollow_kings"), ("sam_sixstring", "the_hollow_kings"),
+                               ("sam_sixstring", "riff_rita"), ("dee_drums", "neon_riot"), ("riff_rita", "sam_sixstring")):
+        insert(follows, follower_id=ids[follower], followed_id=ids[followed], created_at=stamp(days=2))
+    for username, text, minutes_ago in (
+            ("sam_sixstring", "I am driving from Dublin on Friday with two spare seats. Message me.", 300),
+            ("riff_rita", "Count me in for a seat! Meeting at the bar before doors?", 280),
+            ("dee_drums", "Anyone want to jam on Saturday? I can bring a practice kit.", 120)):
+        insert(gig_comments, user_id=ids[username], source="community", event_ref=str(post_ids[0]), title="The Hollow Kings",
+               event_at=friday, latitude=53.2744, longitude=-9.0491, body=text, created_at=stamp(minutes=minutes_ago))
     commit()
     bac_log("demo", "demo scene created: %d members, %d posts" % (len(ids), len(post_ids)))
     return True

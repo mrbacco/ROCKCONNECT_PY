@@ -13,7 +13,7 @@ from flask import (Blueprint, abort, flash, g, redirect, render_template, reques
                    url_for)
 from sqlalchemy.exc import IntegrityError
 
-from . import geo, modlog, ratelimit, storage
+from . import geo, modlog, ratelimit, review, storage, taxonomy
 from .auth import login_required, verified_required
 from .baclog import bac_log
 from .db import commit, comments, execute, insert, posts, rollback
@@ -36,11 +36,12 @@ VISIBLE_AUTHOR = (
 )
 
 POST_SELECT = (
-    "SELECT p.id, p.body, p.image_filename, p.created_at, p.event_at, p.event_place, p.latitude, p.longitude,"
+    "SELECT p.id, p.body, p.image_filename, p.created_at, p.event_at, p.event_place, p.latitude, p.longitude, p.genre, p.mod_state,"
     " u.id AS author_id, u.username AS author, u.name AS author_name, u.kind AS author_kind,"
     " (SELECT count(*) FROM likes l WHERE l.post_id = p.id) AS like_count,"
     " (SELECT count(*) FROM likes l WHERE l.post_id = p.id AND l.user_id = :me) AS liked_by_me"
-    " FROM posts p JOIN users u ON u.id = p.user_id WHERE " + VISIBLE_AUTHOR
+    " FROM posts p JOIN users u ON u.id = p.user_id WHERE " + VISIBLE_AUTHOR +
+    " AND (p.mod_state = 'ok' OR p.user_id = :me)"      # waiting for a moderator: only its author sees it
 )
 
 
@@ -51,16 +52,17 @@ def _attach_comments(rows):
         id_params = {"i%d" % n: r["id"] for n, r in enumerate(rows)}
         marks = ", ".join(":" + k for k in id_params)
         for c in execute(
-            "SELECT c.id, c.post_id, c.body, c.created_at, c.user_id, u.username AS author"
+            "SELECT c.id, c.post_id, c.body, c.created_at, c.user_id, c.mod_state, u.username AS author"
             " FROM comments c JOIN users u ON u.id = c.user_id"
-            " WHERE c.post_id IN (" + marks + ") AND " + VISIBLE_AUTHOR + " ORDER BY c.id",
+            " WHERE c.post_id IN (" + marks + ") AND " + VISIBLE_AUTHOR +
+            " AND (c.mod_state = 'ok' OR c.user_id = :me) ORDER BY c.id",
             me=g.user["id"], **id_params
         ).mappings():
             comments_by_post[c["post_id"]].append(c)
     return comments_by_post
 
 
-def load_posts(user_id=None, before=None):
+def load_posts(user_id=None, before=None, following=False):
     """Newest-first page of posts (optionally one author's), with likes and comments attached.
 
     `before` is the id of the last post of the previous page (keyset pagination: fast and stable
@@ -71,6 +73,8 @@ def load_posts(user_id=None, before=None):
     if user_id is not None:
         sql += " AND p.user_id = :uid"
         params["uid"] = user_id
+    if following:       # only the people I follow, and me
+        sql += " AND (p.user_id = :me OR p.user_id IN (SELECT followed_id FROM follows WHERE follower_id = :me))"
     if before:
         sql += " AND p.id < :before"
         params["before"] = before
@@ -85,7 +89,7 @@ def load_posts(user_id=None, before=None):
 def load_gigs():
     """Announced gigs that have not happened yet, soonest first."""
     since = (datetime.now(timezone.utc) - timedelta(hours=GIG_GRACE_HOURS)).strftime("%Y-%m-%d %H:%M")
-    rows = execute(POST_SELECT + " AND p.event_at IS NOT NULL AND p.event_at >= :since"
+    rows = execute(POST_SELECT + " AND p.mod_state = 'ok' AND p.event_at IS NOT NULL AND p.event_at >= :since"
                    " ORDER BY p.event_at, p.id LIMIT 100", me=g.user["id"], since=since).mappings().fetchall()
     bac_log("feed", "loaded %d upcoming gig(s)" % len(rows))
     return rows, _attach_comments(rows)
@@ -103,8 +107,10 @@ def remove_image(filename):
 
 
 def _get_post_or_404(post_id):
-    post = execute("SELECT id, user_id, image_filename FROM posts WHERE id = :id",
+    post = execute("SELECT id, user_id, image_filename, mod_state FROM posts WHERE id = :id",
                    id=post_id).mappings().fetchone()
+    if post is not None and post["mod_state"] != "ok" and post["user_id"] != g.user["id"] and not review.is_staff(g.user):
+        post = None     # held or hidden: only its author (and staff, through the review queue) can touch it
     if post is None:
         bac_log("feed", "post id=%s not found -> 404" % post_id)
         abort(404)
@@ -145,9 +151,12 @@ def _gig_position(place):
 @bp.route("/feed")
 @login_required
 def index():
-    rows, comments_by_post, has_more = load_posts(before=request.args.get("before", type=int))
-    return render_template("feed.html", posts=rows, comments_by_post=comments_by_post,
-                           has_more=has_more, next_before=rows[-1]["id"] if has_more else None)
+    from . import social    # imported here: social.py itself imports this module
+    following = request.args.get("following") == "1"
+    rows, comments_by_post, has_more = load_posts(before=request.args.get("before", type=int), following=following)
+    return render_template("feed.html", posts=rows, comments_by_post=comments_by_post, following=following,
+                           has_more=has_more, next_before=rows[-1]["id"] if has_more else None,
+                           attendance=social.post_attendance(rows, g.user["id"]))
 
 
 @bp.route("/posts/<int:post_id>")
@@ -157,14 +166,20 @@ def single_post(post_id):
     rows = execute(POST_SELECT + " AND p.id = :pid", me=g.user["id"], pid=post_id).mappings().fetchall()
     if not rows:
         abort(404)  # missing, or by someone suspended / who blocked you
-    return render_template("post.html", posts=rows, comments_by_post=_attach_comments(rows))
+    from . import social
+    gig = social.gig_info("community", post_id, g.user["id"]) if rows[0]["event_at"] else None
+    return render_template("post.html", posts=rows, comments_by_post=_attach_comments(rows),
+                           attendance=social.post_attendance(rows, g.user["id"]),
+                           panel=social.panel(gig, g.user["id"], request.args) if gig else None)
 
 
 @bp.route("/gigs")
 @login_required
 def gigs():
+    from . import social
     rows, comments_by_post = load_gigs()
-    return render_template("gigs.html", posts=rows, comments_by_post=comments_by_post)
+    return render_template("gigs.html", posts=rows, comments_by_post=comments_by_post,
+                           attendance=social.post_attendance(rows, g.user["id"]))
 
 
 @bp.route("/posts", methods=("POST",))
@@ -177,7 +192,7 @@ def create_post():
     has_image = upload is not None and bool(upload.filename)
 
     # a gig announcement carries a date (and optionally a place); only bands and venues may post them
-    event_at = event_place = event_lat = event_lon = None
+    event_at = event_place = event_lat = event_lon = event_genre = None
     event_raw = request.form.get("event_at", "").strip()
     if event_raw:
         if g.user["kind"] not in GIG_KINDS and not _is_admin():
@@ -189,6 +204,7 @@ def create_post():
             flash("That gig date is not valid.", "danger")
             return _back()
         event_place = request.form.get("event_place", "").strip()[:120] or None
+        event_genre = request.form.get("genre") if request.form.get("genre") in taxonomy.GENRES else None
         event_lat, event_lon = _gig_position(event_place)
 
     if not body and not has_image and not event_at:
@@ -214,10 +230,14 @@ def create_post():
         filename = secrets.token_hex(16) + ext
         storage.get().save(filename, data)
 
+    held = review.screen(g.user, "%s %s" % (body, event_place or ""), "post", bool(filename))
     try:
         post_id = insert(posts, user_id=g.user["id"], body=body, image_filename=filename,
                          created_at=now_str(), event_at=event_at, event_place=event_place,
-                         latitude=event_lat, longitude=event_lon)
+                         latitude=event_lat, longitude=event_lon, genre=event_genre,
+                         mod_state="held" if held else "ok")
+        if held:
+            review.enqueue("post", post_id, g.user["id"], held, body or "(photo or gig announcement)")
         commit()
     except Exception:
         rollback()
@@ -225,7 +245,9 @@ def create_post():
         raise
     bac_log("feed", "post id=%s created by %r (%d chars, image=%s, gig=%s)"
             % (post_id, g.user["username"], len(body), bool(filename), bool(event_at)))
-    if event_at and event_lat is None:
+    if held:
+        flash("Thanks! Your post is waiting for a quick check by a moderator. Until then only you can see it.", "info")
+    elif event_at and event_lat is None:
         flash("Gig announced! We could not place it on the map, so it will not appear in 'gigs near me' searches. "
               "Post it from the venue with the location button to fix that.", "warning")
     else:
@@ -286,9 +308,14 @@ def add_comment(post_id):
     elif len(body) > MAX_COMMENT_LENGTH:
         flash("Comment too long (max %d characters)." % MAX_COMMENT_LENGTH, "danger")
     else:
+        held = review.screen(g.user, body, "comment")
         comment_id = insert(comments, post_id=post_id, user_id=g.user["id"], body=body,
-                            created_at=now_str())
+                            created_at=now_str(), mod_state="held" if held else "ok")
+        if held:
+            review.enqueue("comment", comment_id, g.user["id"], held, body)
         commit()
+        if held:
+            flash("Thanks! Your comment is waiting for a quick check by a moderator.", "info")
         bac_log("feed", "comment id=%s (%d chars) by %r on post %s"
                 % (comment_id, len(body), g.user["username"], post_id))
     return _back(post_id)

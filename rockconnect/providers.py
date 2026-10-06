@@ -1,7 +1,7 @@
 # File: providers.py
 # Author: mrbacco04@gmail.com
 # Date: 2026-10-05
-"""Event providers besides Ticketmaster: Skiddle, Songkick and Bandsintown.
+"""Event providers besides Ticketmaster: Skiddle, Songkick, PredictHQ and Bandsintown.
 
 Each provider turns the answer of its API into the same small dictionary (see importer.normalise_ticketmaster):
 source, external_id, title, venue, city, event_at, time_known, latitude, longitude, ticket_url, genre.
@@ -9,6 +9,8 @@ source, external_id, title, venue, city, event_at, time_known, latitude, longitu
 What each one can do (details and terms in docs/EVENT-IMPORT.md):
   Skiddle      search by position and radius, UK and Ireland. Free key, apply at skiddle.com/api/join.php.
   Songkick     search by position, worldwide. Keys are given out by application only.
+  PredictHQ    search by position and radius, worldwide. Paid service with a free trial; the key is a bearer token.
+               It describes events (venue, time, expected attendance) but has no ticket links.
   Bandsintown  NO search by place. It lists the events of one artist, and its terms say it is for artists (or people
                acting for them) with their own app id. So a band connects its own page; see fetch_bandsintown_artist.
 
@@ -20,15 +22,18 @@ import re
 import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from . import geo
 
 SKIDDLE_URL = "https://www.skiddle.com/api/v1/events/search/"
 SONGKICK_URL = "https://api.songkick.com/api/3.0/events.json"
+PREDICTHQ_URL = "https://api.predicthq.com/v1/events/"
 BANDSINTOWN_URL = "https://rest.bandsintown.com/artists/%s/events"
 
 SKIDDLE_PAGE = 100       # the API's maximum
 SONGKICK_PAGE = 50       # the API's maximum
+PREDICTHQ_PAGE = 100
 PAUSE_SECONDS = 0.3
 
 
@@ -160,6 +165,77 @@ def fetch_songkick(area, api_key, days, get, max_pages=10, stats=None, timeout=N
                 yield item
         if page * int(results_page.get("perPage") or SONGKICK_PAGE) >= int(results_page.get("totalEntries") or 0):
             return
+        time.sleep(PAUSE_SECONDS)
+    stats["truncated"] = True
+
+
+# ------------------------------------------------------------------ PredictHQ (worldwide, paid with a free trial)
+GENERIC_LABELS = {"concert", "concerts", "music", "live", "live music", "festival"}
+
+
+def _phq_local(stamp, tz_name, lon):
+    """PredictHQ gives UTC. Returns (local day, local 'HH:MM' or None). Without the time-zone database (a plain Windows
+    Python) the day is estimated from the longitude and no time of day is claimed."""
+    when = datetime.strptime(str(stamp)[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+    try:
+        local = when.astimezone(ZoneInfo(str(tz_name)))
+    except (ZoneInfoNotFoundError, ValueError, TypeError, KeyError):
+        local = when + timedelta(hours=round(lon / 15.0))
+        return local.strftime("%Y-%m-%d"), None
+    clock = local.strftime("%H:%M")
+    return local.strftime("%Y-%m-%d"), None if clock == "00:00" else clock     # midnight means 'time not known'
+
+
+def normalise_predicthq(event):
+    """One PredictHQ concert -> our row, or None. Needs a named venue: without one the position is a city centre."""
+    try:
+        external_id, title = str(event["id"]), _text(event.get("title"), 255)
+        if event.get("private") or str(event.get("state") or "active") not in ("active", "predicted"):
+            return None
+        lon, lat = event["location"][0], event["location"][1]
+        where = _position(lat, lon)
+        venue = next((e for e in event.get("entities") or [] if isinstance(e, dict) and e.get("type") == "venue"), None)
+        if not title or where is None or venue is None or not venue.get("name"):
+            return None
+        day, clock = _phq_local(event["start"], event.get("timezone"), where[1])
+    except (KeyError, TypeError, IndexError, ValueError, AttributeError):
+        return None
+    address = (event.get("geo") or {}).get("address") or {}
+    labels = [t for t in event.get("labels") or [] if isinstance(t, str) and t.lower() not in GENERIC_LABELS]
+    return {
+        "source": "predicthq", "external_id": external_id[:64], "title": title,
+        "venue": _text(venue.get("name"), 160), "city": _text(address.get("locality"), 120),
+        "event_at": "%s %s" % (day, clock or "00:00"), "time_known": int(clock is not None),
+        "latitude": where[0], "longitude": where[1], "ticket_url": None,
+        "genre": labels[0].replace("-", " ")[:60] if labels else None,
+    }
+
+
+def fetch_predicthq(area, api_key, days, get, max_pages=10, stats=None, timeout=None):
+    """Yield normalised concerts around an area. Pages are followed through the answer's own `next` address, but only
+    if it points at PredictHQ (the key is sent with every request)."""
+    from .importer import ImportFailed
+    stats = stats if stats is not None else {}
+    now = datetime.now(timezone.utc)
+    url = PREDICTHQ_URL + "?" + urllib.parse.urlencode({
+        "category": "concerts", "within": "%dkm@%.4f,%.4f" % (max(1, math.ceil(area.radius_km)), area.lat, area.lon),
+        "active.gte": now.strftime("%Y-%m-%d"), "active.lte": (now + timedelta(days=days)).strftime("%Y-%m-%d"),
+        "sort": "start", "limit": PREDICTHQ_PAGE})
+    headers = {"Authorization": "Bearer " + api_key}
+    for _ in range(max_pages):
+        data = get(url, provider="PredictHQ", headers=headers, **({"timeout": timeout} if timeout else {}))
+        if not isinstance(data, dict) or data.get("error"):
+            raise ImportFailed("PredictHQ answered with an error: %s" % _text(
+                data.get("error") if isinstance(data, dict) else "unreadable answer", 120))
+        for event in data.get("results") or []:
+            item = normalise_predicthq(event)
+            if item:
+                yield item
+        url = data.get("next")
+        if not url:
+            return
+        if not str(url).startswith(PREDICTHQ_URL):
+            raise ImportFailed("PredictHQ sent a next-page address that is not theirs; stopped.")
         time.sleep(PAUSE_SECONDS)
     stats["truncated"] = True
 

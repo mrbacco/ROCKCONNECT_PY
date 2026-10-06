@@ -247,6 +247,7 @@ def test_blocking_stops_messages_in_both_directions(scene):
     app, boss, troll, rita = scene
     tid, rid = user_id(app, "troll"), user_id(app, "rita")
     post_form(rita, "/conversations/start/%d" % tid)                         # a chat exists
+    post_form(troll, "/conversations/1/accept", page="/conversations/1")
     post_form(troll, "/conversations/1", page="/conversations/1", body="hello rita")
     assert scalar(app, "SELECT count(*) FROM messages") == 1
     rita.post("/block/%d" % tid, data={"_csrf": token_of(rita, "/feed")})

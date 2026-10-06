@@ -6,7 +6,7 @@ import re
 from rockconnect import create_app
 
 USER = dict(username="bacco", name="Andrea B", email="a@b.com",
-            password="S3cret!pw", about="I like rock", accept="1")
+            password="S3cret!pw", about="I like rock", accept="1", birth_date="1990-05-15")
 
 
 def csrf(client, url="/users/add"):
@@ -107,6 +107,12 @@ def send(client, conv_id, body):
                        follow_redirects=True)
 
 
+def accept(client, conv_id):
+    """The asked person accepts the message request (nothing can be written before that)."""
+    return client.post("/conversations/%d/accept" % conv_id,
+                       data={"_csrf": csrf(client, "/conversations/%d" % conv_id)}, follow_redirects=True)
+
+
 def test_conversations_require_login(client):
     assert client.get("/conversations/").status_code == 302
     assert client.post("/conversations/start/1", data={"_csrf": csrf(client)}).status_code == 302
@@ -120,6 +126,8 @@ def test_start_conversation_is_idempotent_and_both_see_messages(client):
         from rockconnect.db import execute
         assert execute("SELECT count(*) FROM conversations").scalar() == 1
 
+    assert b"once Rita R accepts it" in send(bacco, 1, "hello rita").data       # a request: nothing can be sent yet
+    accept(rita, 1)
     assert b"hello rita" in send(bacco, 1, "hello rita").data
     assert b"hi bacco" in send(rita, 1, "hi bacco").data
     page = bacco.get("/conversations/1").data
@@ -144,16 +152,19 @@ def test_cannot_message_self_or_unknown_user(client):
 
 
 def test_message_validation(client):
-    bacco, _ = two_users(client)
+    bacco, rita = two_users(client)
     start(bacco, 2)
+    accept(rita, 1)
     assert b"Write something first" in send(bacco, 1, "   ").data
     assert b"too long" in send(bacco, 1, "x" * 2001).data
 
 
 def test_message_html_escaped(client):
-    bacco, _ = two_users(client)
+    bacco, rita = two_users(client)
     start(bacco, 2)
-    assert b"<script>alert(1)</script>" not in send(bacco, 1, "<script>alert(1)</script>").data
+    accept(rita, 1)
+    page = send(bacco, 1, "<script>alert(1)</script>").data
+    assert b"<script>alert(1)</script>" not in page and b"&lt;script&gt;alert(1)&lt;/script&gt;" in page
 
 
 def test_database_url_selects_backend(tmp_path):

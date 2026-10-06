@@ -36,7 +36,7 @@ def test_signup_needs_consent_and_records_it(tmp_path):
     assert b"accept the terms" in refused.data and scalar(app, "SELECT count(*) FROM users") == 0
     assert b"account is ready" in signup(client).data
     assert scalar(app, "SELECT terms_accepted_at FROM users")                      # proof of consent kept
-    assert b"at least 16 years old" in client.get("/users/add").data
+    assert b"at least 18 years old" in client.get("/users/add").data
 
 
 def test_legal_pages_are_public_and_use_the_operator_details(tmp_path):
@@ -94,6 +94,7 @@ def test_export_contains_my_data_and_nothing_else(pair):
     post_form(rita, "/posts/1/like")
     post_form(bacco, "/posts/2/like")
     post_form(bacco, "/conversations/start/%d" % user_id(app, "rita"))
+    post_form(rita, "/conversations/1/accept", page="/conversations/1")
     post_form(bacco, "/conversations/1", page="/conversations/1", body="hi rita, private")
     post_form(rita, "/conversations/1", page="/conversations/1", body="rita's private reply")
     post_form(bacco, "/block/%d" % user_id(app, "rita"))
@@ -155,6 +156,7 @@ def test_delete_erases_everything_of_mine_and_only_mine(pair):
     post_form(bacco, "/posts/2/comments", body="bacco comments on rita")     # on her post
     post_form(rita, "/posts/1/like"), post_form(bacco, "/posts/2/like")
     post_form(bacco, "/conversations/start/%d" % user_id(app, "rita"))
+    post_form(rita, "/conversations/1/accept", page="/conversations/1")
     post_form(bacco, "/conversations/1", page="/conversations/1", body="private words")
     post_form(rita, "/block/%d" % user_id(app, "bacco"))
     bacco.post("/report/post/2", data={"reason": "spam", "_csrf": token_of(bacco, "/report/post/2")})

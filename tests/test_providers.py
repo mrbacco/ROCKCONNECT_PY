@@ -1,7 +1,7 @@
 # File: test_providers.py
 # Author: mrbacco04@gmail.com
 # Date: 2026-10-05
-"""Skiddle, Songkick and Bandsintown: reading their answers and building their requests."""
+"""Skiddle, Songkick, PredictHQ and Bandsintown: reading their answers and building their requests."""
 from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
 
@@ -27,8 +27,9 @@ class Get:
     def __init__(self, *answers):
         self.answers, self.calls = list(answers), []
 
-    def __call__(self, url, provider=None, timeout=None):
+    def __call__(self, url, provider=None, timeout=None, headers=None):
         self.calls.append((url, provider, timeout))
+        self.headers = headers
         answer = self.answers.pop(0)
         if isinstance(answer, Exception):
             raise answer
@@ -171,6 +172,107 @@ def test_songkick_empty_and_error_answers():
             "status": "error", "error": {"message": "Invalid API key"}}})))
 
 
+# ------------------------------------------------------------------ PredictHQ
+def phq_event(n=1, **over):
+    event = {"id": "phq%d" % n, "title": "PredictHQ Band %d" % n, "category": "concerts", "state": "active",
+             "start": "%sT19:30:00Z" % day(), "timezone": "Europe/London", "location": [-0.1276, 51.5072],
+             "labels": ["concert", "indie-rock"], "private": False,
+             "entities": [{"type": "venue", "name": "The Roundhouse", "entity_id": "v1"}],
+             "geo": {"address": {"locality": "London", "country_code": "GB"}}}
+    event.update(over)
+    return event
+
+
+def test_predicthq_event_is_read_in_local_time():
+    item = providers.normalise_predicthq(phq_event())
+    assert item["source"] == "predicthq" and item["external_id"] == "phq1" and item["title"] == "PredictHQ Band 1"
+    assert item["venue"] == "The Roundhouse" and item["city"] == "London" and item["ticket_url"] is None
+    assert (item["latitude"], item["longitude"]) == (51.5072, -0.1276)     # PredictHQ lists longitude first
+    assert item["genre"] == "indie rock" and item["time_known"] == 1
+    from zoneinfo import ZoneInfo
+    utc = datetime.strptime(day() + " 19:30", "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+    assert item["event_at"] == utc.astimezone(ZoneInfo("Europe/London")).strftime("%Y-%m-%d %H:%M")
+
+
+def test_predicthq_local_time_uses_the_venue_time_zone():
+    from zoneinfo import ZoneInfo
+    item = providers.normalise_predicthq(phq_event(start="2026-12-05T23:30:00Z", timezone="Australia/Sydney",
+                                                   location=[151.2093, -33.8688]))
+    local = datetime(2026, 12, 5, 23, 30, tzinfo=timezone.utc).astimezone(ZoneInfo("Australia/Sydney"))
+    assert item["event_at"] == local.strftime("%Y-%m-%d %H:%M") and item["event_at"] == "2026-12-06 10:30"
+
+
+def test_predicthq_without_a_time_zone_database_gives_a_day_but_no_clock():
+    item = providers.normalise_predicthq(phq_event(timezone="Nowhere/Land", start="2026-12-05T23:30:00Z",
+                                                   location=[151.2093, -33.8688]))
+    assert item["time_known"] == 0 and item["event_at"] == "2026-12-06 00:00"      # +10 h by longitude
+
+
+def test_predicthq_midnight_means_time_not_known():
+    item = providers.normalise_predicthq(phq_event(start="2026-12-05T00:00:00Z", timezone="UTC"))
+    assert item["time_known"] == 0 and item["event_at"] == "2026-12-05 00:00"
+
+
+def test_predicthq_rejects_events_it_cannot_place_or_that_are_not_on():
+    assert providers.normalise_predicthq(phq_event(entities=[])) is None                 # no venue: only a city centre
+    assert providers.normalise_predicthq(phq_event(entities=[{"type": "performer", "name": "X"}])) is None
+    assert providers.normalise_predicthq(phq_event(location=[0, 0])) is None
+    assert providers.normalise_predicthq(phq_event(location=None)) is None
+    assert providers.normalise_predicthq(phq_event(title="")) is None
+    assert providers.normalise_predicthq(phq_event(private=True)) is None
+    assert providers.normalise_predicthq(phq_event(state="cancelled")) is None
+    assert providers.normalise_predicthq(phq_event(start="soon")) is None
+    assert providers.normalise_predicthq({}) is None
+
+
+def test_predicthq_request_uses_a_bearer_token_and_follows_next(monkeypatch):
+    monkeypatch.setattr(providers.time, "sleep", lambda s: None)
+    nxt = "https://api.predicthq.com/v1/events/?offset=100"
+    get = Get({"count": 150, "next": nxt, "results": [phq_event(i) for i in range(100)]},
+              {"count": 150, "next": None, "results": [phq_event(i) for i in range(100, 150)]})
+    assert len(list(providers.fetch_predicthq(Area("Paris", 48.8566, 2.3522, 30), "TOKEN", 20, get))) == 150
+    first = get.calls[0][0]
+    p = params(first)
+    assert first.startswith("https://api.predicthq.com/v1/events/?") and p["category"] == "concerts"
+    assert p["within"] == "30km@48.8566,2.3522" and p["sort"] == "start" and p["limit"] == "100"
+    assert p["active.gte"] == day(0) and p["active.lte"] == day(20)
+    assert "TOKEN" not in first                                                 # the key travels in a header, not the address
+    assert get.headers == {"Authorization": "Bearer TOKEN"} and get.calls[1][0] == nxt
+
+
+def test_predicthq_refuses_a_next_page_that_is_not_theirs_and_reports_errors():
+    get = Get({"results": [phq_event()], "next": "https://evil.example.com/steal?x=1"})
+    with pytest.raises(ImportFailed, match="not theirs"):
+        list(providers.fetch_predicthq(LONDON, "K", 20, get))
+    with pytest.raises(ImportFailed, match="PredictHQ answered with an error: invalid token"):
+        list(providers.fetch_predicthq(LONDON, "K", 20, Get({"error": "invalid token"})))
+    assert list(providers.fetch_predicthq(LONDON, "K", 20, Get({"count": 0, "next": None, "results": []}))) == []
+
+
+def test_predicthq_is_a_registered_provider_with_its_own_key_setting(monkeypatch):
+    assert importer.PROVIDERS["predicthq"].key_setting == "PREDICTHQ_API_KEY"
+    assert importer.LABELS["predicthq"] == "PredictHQ" and importer.KEY_SETTINGS["PredictHQ"] == "PREDICTHQ_API_KEY"
+    from rockconnect import gigmatch
+    assert gigmatch.SOURCE_RANK["predicthq"] > gigmatch.SOURCE_RANK["songkick"]       # ticket-selling listings win a tie
+
+
+def test_the_http_helper_sends_the_header_and_never_shows_it_in_errors(monkeypatch, tmp_path):
+    import io
+    import urllib.error
+    from helpers import make_app
+    app = make_app(tmp_path)
+    seen = {}
+
+    def fake_open(request, timeout=None):
+        seen["auth"] = request.get_header("Authorization")
+        raise urllib.error.HTTPError(request.full_url, 401, "no", {}, io.BytesIO(b""))
+    monkeypatch.setattr(importer.urllib.request, "urlopen", fake_open)
+    with app.app_context(), pytest.raises(ImportFailed) as err:
+        importer._http_get_json("https://api.predicthq.com/v1/events/", provider="PredictHQ", headers={"Authorization": "Bearer SECRET"})
+    assert seen["auth"] == "Bearer SECRET"
+    assert "SECRET" not in str(err.value) and "PREDICTHQ_API_KEY" in str(err.value)
+
+
 # ------------------------------------------------------------------ Bandsintown
 def bit_event(n=1, **over):
     event = {"id": "bit%d" % n, "datetime": day() + "T20:00:00", "url": "https://www.bandsintown.com/e/%d" % n,
@@ -226,6 +328,6 @@ def test_clock_and_position_helpers():
 
 
 def test_the_registry_lists_the_location_providers_in_priority_order():
-    assert list(importer.PROVIDERS) == ["ticketmaster", "skiddle", "songkick"]
+    assert list(importer.PROVIDERS) == ["ticketmaster", "skiddle", "songkick", "predicthq"]
     assert importer.LABELS["bandsintown"] == "Bandsintown" and importer.LABELS["skiddle"] == "Skiddle"
     assert importer.KEY_SETTINGS["Skiddle"] == "SKIDDLE_API_KEY"

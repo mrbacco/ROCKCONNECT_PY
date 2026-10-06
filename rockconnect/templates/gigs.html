@@ -9,9 +9,11 @@
 <div class="row">
   <div class="col-lg-6 offset-lg-3 col-md-8 offset-md-2">
     <h2>Upcoming gigs</h2>
+    <p><a class="btn btn-ghost btn-sm" href="{{ url_for('social.mine') }}">My gigs</a></p>
 
     {# "gigs near me": gigs.js asks the browser for the position and calls /api/v1/gigs/nearby #}
-    <div class="card rc-card nearby" id="nearby" data-url="{{ url_for('api.nearby_gigs') }}">
+    <div class="card rc-card nearby" id="nearby" data-url="{{ url_for('api.nearby_gigs') }}"
+         data-attend-url="{{ url_for('social.attendance') }}" data-csrf="{{ csrf_token }}">
       <div class="card-body">
         <h5 class="mb-2">&#128205; Gigs near you</h5>
         <div class="d-flex flex-wrap align-items-center">

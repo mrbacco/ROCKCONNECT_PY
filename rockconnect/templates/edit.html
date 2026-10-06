@@ -47,6 +47,45 @@
         <label for="about">About:</label>
         <textarea id="about" class="form-control" name="about" rows="4" maxlength="1000" required>{{ request.form.get('about', g.user['about']) }}</textarea>
       </div>
+      <fieldset class="border-top pt-3 mb-3">
+        <legend class="h6 text-muted">What you play</legend>
+        <p class="small text-muted mb-2">Tick what you play. Say how well too if you like; it helps others find the right people.</p>
+        <div class="instrument-grid">
+          {% for key, label in instruments.items() %}
+          <div class="instrument-row">
+            <label class="tick"><input type="checkbox" name="instruments" value="{{ key }}" {{ 'checked' if key in tags.instruments }}> {{ label }}</label>
+            <select class="form-control form-control-sm level-select" name="level_{{ key }}" aria-label="How well do you play {{ label }}?">
+              <option value="">level</option>
+              {% for lkey, llabel in level_labels.items() %}<option value="{{ lkey }}" {{ 'selected' if tags.instrument_levels.get(key) == lkey }}>{{ llabel }}</option>{% endfor %}
+            </select>
+          </div>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <fieldset class="border-top pt-3 mb-3">
+        <legend class="h6 text-muted">Music you love</legend>
+        <div class="tick-grid">
+          {% for key, label in genres.items() %}
+          <label class="tick"><input type="checkbox" name="genres" value="{{ key }}" {{ 'checked' if key in tags.genres }}> {{ label }}</label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <fieldset class="border-top pt-3 mb-3">
+        <legend class="h6 text-muted">What you are looking for</legend>
+        <div class="tick-grid">
+          {% for key, label in goals.items() %}
+          <label class="tick"><input type="checkbox" name="goals" value="{{ key }}" {{ 'checked' if key in tags.goals }}> {{ label }}</label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <div class="form-check mb-3">
+        <input id="hide_plans" class="form-check-input" type="checkbox" name="hide_plans" value="1" {{ 'checked' if g.user['hide_plans'] }}>
+        <label class="form-check-label small text-normal" for="hide_plans">Never show which gigs I am going to (you are still counted, but nobody sees your name)</label>
+      </div>
+      <div class="form-check mb-3">
+        <input id="notify_friends_going" class="form-check-input" type="checkbox" name="notify_friends_going" value="1" {{ 'checked' if g.user['notify_friends_going'] }}>
+        <label class="form-check-label small text-normal" for="notify_friends_going">Tell me when people I follow say they are going to a gig</label>
+      </div>
       {% if g.user['kind'] == 'band' %}
       <fieldset class="border-top pt-3 mb-3">
         <legend class="h6 text-muted">Show your Bandsintown dates on the gig board</legend>

@@ -16,6 +16,7 @@ FETCH = {"X-Requested-With": "fetch"}
 
 def make_app(tmp_path, minutes=60):
     return create_app({"TESTING": True, "SESSION_LIFETIME_MINUTES": minutes,
+                       "NEW_MEMBER_HOLD_POSTS": 0, "NEW_MEMBER_HOLD_HOURS": 0, "DEFAULT_WORD_LISTS": "",
                        "INSTANCE_PATH": str(tmp_path / "instance"),
                        "DATABASE_URL": "sqlite:///" + str(tmp_path / "s.sqlite"),
                        "UPLOAD_DIR": str(tmp_path / "uploads")})

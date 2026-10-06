@@ -5,6 +5,7 @@
 #}
 {% extends "layout.html" %}
 {% from "_macros.html" import avatar, kind_badge %}
+{% from "_social_macros.html" import tag_chips with context %}
 {% block title %}{{ user['username'] }} - {{ site.name }}{% endblock %}
 {% block content %}
 <div class="row">
@@ -15,10 +16,22 @@
         <div class="ml-3 flex-grow-1">
           <h2 class="mb-0">{{ user['name'] }} {{ kind_badge(user['kind']) }}</h2>
           <div class="text-muted">@{{ user['username'] }}{% if user['location'] %} &middot; {{ user['location'] }}{% endif %}</div>
+          {% if g.user %}
+          <div class="small text-muted">
+            {% if g.user['id'] == user['id'] %}
+            <a href="{{ url_for('views.index', relation='followers') }}">{{ follower_count }} follower{{ '' if follower_count == 1 else 's' }}</a> &middot;
+            <a href="{{ url_for('views.index', relation='following') }}">{{ following_count }} following</a>
+            {% else %}{{ follower_count }} follower{{ '' if follower_count == 1 else 's' }} &middot; {{ following_count }} following{% endif %}
+          </div>
+          {% endif %}
           {% if user['status'] == 'banned' %}<div class="text-danger small">Suspended</div>{% endif %}
         </div>
         {% if g.user and g.user['id'] != user['id'] %}
           {% if not i_blocked and not blocked_me %}
+          <form class="mr-2" method="POST" action="{{ url_for('follows.unfollow_page' if i_follow else 'follows.follow_page', user_id=user['id']) }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <button class="btn {{ 'btn-outline-dark' if i_follow else 'btn-outline-primary' }}" type="submit">{{ 'Following' if i_follow else 'Follow' }}</button>
+          </form>
           <form method="POST" action="{{ url_for('conversations.start', user_id=user['id']) }}">
             <input type="hidden" name="_csrf" value="{{ csrf_token }}">
             <button class="btn btn-primary" type="submit">&#128172; Message</button>
@@ -31,6 +44,9 @@
       <div class="card-body border-top">
         <h6 class="text-muted">About</h6>
         <p class="post-body mb-0">{{ user['about'] }}</p>
+        {% if tags.instruments or tags.genres or tags.goals %}
+        <div class="chips mt-2">{{ tag_chips(tags, instruments, genres, goals) }}</div>
+        {% endif %}
         {% if user['website'] %}
         <p class="mt-2 mb-0"><a href="{{ user['website'] }}" target="_blank" rel="nofollow noopener ugc">{{ user['website'] }}</a></p>
         {% endif %}
@@ -54,8 +70,20 @@
       {% endif %}
     </div>
 
+    {% if g.user and plans %}
+    <div class="card rc-card"><div class="card-body">
+      <h5 class="mb-2">Going to</h5>
+      {% for p in plans %}
+      <div class="d-flex align-items-baseline mb-1">
+        {% if p.url %}<a class="author" href="{{ p.url }}#going">{{ p.title }}</a>{% else %}<span class="author">{{ p.title }}</span>{% endif %}
+        <span class="small gig-when ml-2">{{ p.label }}</span>
+        <span class="small text-muted ml-auto">{{ p.status }}</span>
+      </div>
+      {% endfor %}
+    </div></div>
+    {% endif %}
     {% if g.user %}
-      {% if g.user['id'] == user['id'] %}{% include "_composer.html" %}{% endif %}
+      {% if g.user['id'] == user['id'] %}<a class="btn btn-ghost btn-sm mb-2" href="{{ url_for('social.mine') }}">My gigs</a>{% include "_composer.html" %}{% endif %}
       {% for p in posts %}
         {% include "_post.html" %}
       {% else %}

@@ -5,6 +5,7 @@
 #}
 {# One post card. Expects: p (post row), comments_by_post (dict). Included inside a {% for p in posts %} loop. #}
 {% from "_macros.html" import avatar, kind_badge %}
+{% from "_social_macros.html" import gig_actions with context %}
 {% set next_url = request.full_path.rstrip('?') %}
 {% set mine = g.user['id'] == p['author_id'] %}
 <div class="card rc-card post" id="post-{{ p['id'] }}">
@@ -40,6 +41,12 @@
       {% endif %}
     </div>
 
+    {% if p['mod_state'] != 'ok' %}
+    <div class="alert alert-warning small py-2 mb-2" role="status">
+      {% if p['mod_state'] == 'held' %}Waiting for a quick check by a moderator. Until then only you can see this post.
+      {% else %}This post was reported and is hidden until a moderator has looked at it. Only you can see it.{% endif %}
+    </div>
+    {% endif %}
     {% if p['event_at'] %}
     <div class="gig-box">
       <span class="gig-when">&#127928; {{ p['event_at']|eventtime }}</span>
@@ -51,6 +58,10 @@
     </div>
     {% endif %}
     {% if p['body'] %}<p class="post-body">{{ p['body'] }}</p>{% endif %}
+    {% if p['event_at'] and p['mod_state'] == 'ok' %}
+    {% if p['genre'] %}<span class="chip chip-genre mb-1">{{ genre_labels.get(p['genre'], p['genre']) }}</span>{% endif %}
+    {{ gig_actions('community', p['id'], (attendance or {}).get(p['id']|string), next_url) }}
+    {% endif %}
   </div>
   {% if p['image_filename'] %}
   <img class="post-image" src="{{ url_for('feed.uploaded_file', filename=p['image_filename']) }}"
@@ -82,6 +93,7 @@
           <span class="post-body">{{ c['body'] }}</span>
         </div>
         <span class="text-muted small ml-2" title="{{ c['created_at'] }} UTC">{{ c['created_at']|timeago }}</span>
+        {% if c['mod_state'] != 'ok' %}<span class="chip chip-instrument ml-1">waiting for a check &middot; only you see this</span>{% endif %}
         {% if g.user['id'] == c['user_id'] or g.user['id'] == p['author_id'] or g.user['role'] == 'admin' %}
         <form class="d-inline" method="POST" action="{{ url_for('feed.delete_comment', comment_id=c['id']) }}">
           <input type="hidden" name="_csrf" value="{{ csrf_token }}">

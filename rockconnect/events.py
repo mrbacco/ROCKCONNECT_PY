@@ -9,7 +9,7 @@ deleted and remembered, so the importer does not bring it back (see importer._hi
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
 from sqlalchemy.exc import IntegrityError
 
-from . import importer, modlog
+from . import importer, modlog, social
 from .auth import login_required
 from .baclog import bac_log
 from .db import commit, execute, hidden_events, insert, rollback
@@ -24,7 +24,9 @@ def event_page(event_id):
     event = execute("SELECT * FROM external_events WHERE id = :id", id=event_id).mappings().fetchone()
     if event is None:
         abort(404)  # unknown, or already removed by the clean-up of old events
-    return render_template("event.html", e=event, source_label=importer.LABELS.get(event["source"], event["source"]))
+    gig = social.gig_info(event["source"], event["external_id"], g.user["id"])
+    return render_template("event.html", e=event, source_label=importer.LABELS.get(event["source"], event["source"]),
+                           panel=social.panel(gig, g.user["id"], request.args) if gig else None)
 
 
 @bp.route("/events/<int:event_id>/hide", methods=("POST",))

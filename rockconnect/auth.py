@@ -17,7 +17,7 @@ from flask import (Blueprint, current_app, flash, g, jsonify, redirect, render_t
                    request, session, url_for)
 from sqlalchemy.exc import IntegrityError
 
-from . import mail, ratelimit, session_store, tokens
+from . import ages, mail, ratelimit, session_store, tokens
 from .baclog import bac_log
 from .db import KINDS, commit, execute, insert, rollback, users
 from .util import (client_ip, external_url, now_str, safe_next, valid_email,
@@ -143,6 +143,23 @@ def load_logged_in_user():
     session_store.renew(token, user["session_expires_at"])  # visiting keeps you signed in
 
 
+# what a member without a date of birth may still reach: the page asking for it, signing out, the legal pages and the
+# rights over their own data
+AGE_GATE_OPEN = {"account.confirm_age", "auth.signout", "account.export", "account.delete", "legal.terms",
+                 "legal.privacy", "legal.cookies", "static", "system.health", "system.theme"}
+
+
+@bp.before_app_request
+def age_gate():
+    """Members who joined before the date of birth was asked for must give it once, before anything else."""
+    if g.user is None or g.user["birth_date"] is not None or request.endpoint in AGE_GATE_OPEN or request.endpoint is None:
+        return None
+    bac_log("auth", "user id=%s has no date of birth yet -> asked once" % g.user["id"])
+    if request.path.startswith("/api/") or _wants_json():
+        return jsonify(error="Please confirm your date of birth first.", code="age_required"), 403
+    return redirect(url_for("account.confirm_age", next=request.full_path.rstrip("?") if request.method == "GET" else None))
+
+
 def send_verification(user_id, current_email, new_email=None):
     """E-mail a confirmation link to the address being confirmed."""
     token = tokens.create(user_id, "verify", new_email)
@@ -164,6 +181,7 @@ def signup():
         form["email"] = form["email"].lower()
         form["kind"] = request.form.get("kind", "fan")
         form["accept"] = request.form.get("accept", "")
+        form["birth_date"] = request.form.get("birth_date", "").strip()
         bac_log("signup", "attempt for username=%r kind=%s" % (form["username"], form["kind"]))
         missing = [f for f in FIELDS if not form[f]]
         error = None
@@ -179,8 +197,10 @@ def signup():
             error = "Name or about text is too long."
         elif password_error(form["password"], form["username"], form["email"]):
             error = password_error(form["password"], form["username"], form["email"])
+        elif ages.error_for(form["birth_date"]):
+            error = ages.error_for(form["birth_date"])
         elif form["accept"] != "1":
-            error = "You must accept the terms and confirm your age to join."
+            error = "You must accept the terms and confirm that your date of birth is true."
         if error:
             bac_log("signup", "rejected: %s" % error)
             flash(error, "danger")
@@ -189,7 +209,7 @@ def signup():
                 new_id = insert(
                     users, username=form["username"], name=form["name"], email=form["email"],
                     password=hash_password(form["password"]), about=form["about"], kind=form["kind"],
-                    terms_accepted_at=now_str(), created_at=now_str(),
+                    terms_accepted_at=now_str(), created_at=now_str(), birth_date=form["birth_date"],
                 )
                 commit()
             except IntegrityError:

@@ -39,6 +39,11 @@
                placeholder="name@email.com" value="{{ form.get('email', '') }}" required>
       </div>
       <div class="form-group">
+        <label for="birth_date">Date of birth</label>
+        <input id="birth_date" class="form-control" type="date" name="birth_date" value="{{ form.get('birth_date', '') }}" required>
+        <small class="form-text text-muted">Only used to check that you are at least {{ site.min_age }} years old. Never shown to anyone.</small>
+      </div>
+      <div class="form-group">
         <label for="pw">Password</label>
         <input id="pw" class="form-control" type="password" name="password" minlength="8" maxlength="72"
                autocomplete="new-password" required>
@@ -51,7 +56,7 @@
       <div class="form-group form-check">
         <input id="accept" class="form-check-input" type="checkbox" name="accept" value="1" required>
         <label class="form-check-label small text-normal" for="accept">
-          I am at least {{ site.min_age }} years old and I accept the
+          I confirm my date of birth is true and I accept the
           <a href="{{ url_for('legal.terms') }}" target="_blank" rel="noopener">Terms</a> and the
           <a href="{{ url_for('legal.privacy') }}" target="_blank" rel="noopener">Privacy Policy</a>.
         </label>

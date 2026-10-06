@@ -11,6 +11,8 @@ python-dotenv>=1.0
 # production web servers: gunicorn (Linux/macOS) or waitress (also Windows)
 gunicorn>=22.0; sys_platform != "win32"
 waitress>=3.0
+# the time-zone database (Windows has none); PredictHQ times are converted to the venue's local time with it
+tzdata>=2024.1
 # optional, install only what you use:
 #   psycopg2-binary>=2.9    PostgreSQL
 #   pymysql>=1.1            MySQL / MariaDB

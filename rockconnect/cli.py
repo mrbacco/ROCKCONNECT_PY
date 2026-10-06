@@ -35,6 +35,22 @@ def remove_admin(username):
     _set_role(username, "member")
 
 
+@click.command("make-moderator")
+@click.argument("username")
+@with_appcontext
+def make_moderator(username):
+    """Let a member work the review queue and the reports (but not suspend or erase anyone)."""
+    _set_role(username, "moderator")
+
+
+@click.command("remove-moderator")
+@click.argument("username")
+@with_appcontext
+def remove_moderator(username):
+    """Take moderator access away from a member."""
+    _set_role(username, "member")
+
+
 @click.command("seed-demo")
 @click.option("--password", default="DemoPass-2026", show_default=True,
               help="Password for every demo account.")
@@ -51,7 +67,7 @@ def seed_demo(password):
 
 @click.command("import-events")
 @click.option("--area", default=None, help="Only this area of IMPORT_AREAS.")
-@click.option("--provider", default=None, help="Only this provider: ticketmaster, skiddle, songkick or bandsintown.")
+@click.option("--provider", default=None, help="Only this provider: ticketmaster, skiddle, songkick, predicthq or bandsintown.")
 @click.option("--dry-run", is_flag=True, help="Fetch and count, but store nothing.")
 @with_appcontext
 def import_events(area, provider, dry_run):
@@ -166,5 +182,5 @@ def doctor(online):
 
 
 def init_app(app):
-    for command in (make_admin, remove_admin, seed_demo, import_events, prune_events, doctor):
+    for command in (make_admin, remove_admin, make_moderator, remove_moderator, seed_demo, import_events, prune_events, doctor):
         app.cli.add_command(command)

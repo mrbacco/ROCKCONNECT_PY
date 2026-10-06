@@ -433,7 +433,9 @@ def test_meta_endpoint_is_public_and_describes_the_server(app):
     assert body["api_version"] == 1 and body["server_version"]
     assert set(body["site"]) == {"name", "tagline", "accent_color", "contact"}
     assert body["features"] == {"nearby_gigs": True, "imported_events": True, "event_sources": ["Ticketmaster"],
-                                "place_search": False}
+                                "place_search": False, "going": True, "people_search": True, "message_requests": True,
+                                "follows": True, "notifications": True, "skill_levels": True, "gig_comments": True,
+                                "calendar": True, "age_check": True}
     assert KEY not in json.dumps(body)                                           # only a yes/no, never the key
 
 

@@ -1,0 +1,42 @@
+{#
+  File: admin_review.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-06
+#}
+{% extends "layout.html" %}
+{% block title %}Review - {{ site.name }}{% endblock %}
+{% block content %}
+{% include "_admin_nav.html" %}
+<p class="text-muted">Posts and comments that wait for a check before other members can see them: caught by the blocked-words
+  list or the new-member rules, or hidden because several members reported them. The author can still see their own.</p>
+{% for it in items %}
+<div class="card rc-card"><div class="card-body">
+  <div class="d-flex justify-content-between flex-wrap">
+    <div>
+      <strong>{{ {'post': 'Post', 'comment': 'Comment', 'gigcomment': 'Gig comment'}[it['target_type']] }} #{{ it['target_id'] }}</strong>
+      <span class="text-muted">&middot; by
+        {% if it['author_id'] %}<a href="{{ url_for('views.profile', user_id=it['author_id']) }}">{{ it['author'] }}</a>{% else %}a deleted account{% endif %}</span>
+    </div>
+    <div class="text-muted small">{{ it['created_at']|timeago }}</div>
+  </div>
+  <p class="small mb-1 mt-1"><span class="chip chip-instrument">{{ it['reason'] }}</span></p>
+  {% if it['snapshot'] %}<blockquote class="report-quote post-body mt-2">{{ it['snapshot'][:1000] }}</blockquote>{% endif %}
+  {% if it['image_filename'] %}
+  <img class="post-image mb-2" style="max-height: 220px; width: auto; border-radius: 10px;"
+       src="{{ url_for('feed.uploaded_file', filename=it['image_filename']) }}" alt="Photo in the held post">
+  {% endif %}
+  {% if it['event_at'] %}<p class="small text-muted mb-2">Gig announcement: {{ it['event_at']|eventtime }}{% if it['event_place'] %}, {{ it['event_place'] }}{% endif %}</p>{% endif %}
+  <form class="d-flex flex-wrap" method="POST">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <button class="btn btn-primary btn-sm" type="submit" formaction="{{ url_for('admin.review_approve', item_id=it['id']) }}">Approve</button>
+    <button class="btn btn-outline-primary btn-sm ml-2" type="submit" formaction="{{ url_for('admin.review_remove', item_id=it['id']) }}">Remove</button>
+    {% if is_admin %}
+    <button class="btn btn-outline-danger btn-sm ml-2" type="submit" name="also_suspend" value="1"
+            formaction="{{ url_for('admin.review_remove', item_id=it['id']) }}">Remove and suspend author</button>
+    {% endif %}
+  </form>
+</div></div>
+{% else %}
+<div class="card rc-card"><div class="card-body text-center text-muted">Nothing is waiting. Well done.</div></div>
+{% endfor %}
+{% endblock %}

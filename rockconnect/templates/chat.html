@@ -1,37 +1,54 @@
 {#
   File: chat.html
   Author: mrbacco04@gmail.com
-  Date: 2026-10-05
+  Date: 2026-10-06
 #}
 {% extends "layout.html" %}
 {% from "_macros.html" import avatar %}
 {% block title %}Messages - {{ site.name }}{% endblock %}
+
+{# one row of the conversation list #}
+{% macro chat_row(c) %}
+<a class="list-group-item list-group-item-action d-flex align-items-center
+          {{ 'active-chat' if conv and conv['id'] == c['id'] }}"
+   href="{{ url_for('conversations.thread', conversation_id=c['id']) }}">
+  {{ avatar(c['other_username'], c['other_id']) }}
+  <div class="ml-2 overflow-hidden flex-grow-1">
+    <div class="{{ 'font-weight-bold' if c['unread'] }}">{{ c['other_username'] }}</div>
+    <div class="small text-truncate {{ 'font-weight-bold unread-preview' if c['unread'] else 'text-muted' }}">
+      {% if c['status'] == 'pending' and c['initiator_id'] != me %}Wants to message you
+      {% elif c['status'] == 'pending' %}Request sent, waiting for an answer
+      {% else %}{{ c['last_body'] or 'No messages yet' }}{% endif %}</div>
+  </div>
+  <div class="text-right ml-2">
+    <div class="small text-muted">{{ (c['last_at'] or c['created_at'])|timeago }}</div>
+    {% if c['status'] == 'pending' and c['initiator_id'] != me %}<span class="badge badge-danger badge-pill">New</span>
+    {% elif c['unread'] %}<span class="badge badge-primary badge-pill">{{ c['unread'] }}</span>{% endif %}
+  </div>
+</a>
+{% endmacro %}
+
 {% block content %}
+{# requests I have received and not answered; everything else is a normal chat (or one I am waiting on) #}
+{% set requests = conversations|selectattr('status', 'equalto', 'pending')|rejectattr('initiator_id', 'equalto', me)|list %}
+{% set chats = conversations|reject('in', requests)|list %}
 <div class="row chat-layout">
   {# ---- left: all my conversations, newest first; bold + dot = unread ---- #}
   <div class="col-md-4 mb-3">
+    {% if requests %}
+    <div class="card rc-card chat-list mb-3">
+      <div class="card-header"><strong>Requests</strong> <span class="badge badge-danger">{{ requests|length }}</span></div>
+      <div class="list-group list-group-flush">{% for c in requests %}{{ chat_row(c) }}{% endfor %}</div>
+    </div>
+    {% endif %}
     <div class="card rc-card chat-list">
       <div class="card-header"><strong>Backstage chats</strong></div>
       <div class="list-group list-group-flush">
-        {% for c in conversations %}
-        <a class="list-group-item list-group-item-action d-flex align-items-center
-                  {{ 'active-chat' if conv and conv['id'] == c['id'] }}"
-           href="{{ url_for('conversations.thread', conversation_id=c['id']) }}">
-          {{ avatar(c['other_username'], c['other_id']) }}
-          <div class="ml-2 overflow-hidden flex-grow-1">
-            <div class="{{ 'font-weight-bold' if c['unread'] }}">{{ c['other_username'] }}</div>
-            <div class="small text-truncate {{ 'font-weight-bold unread-preview' if c['unread'] else 'text-muted' }}">
-              {{ c['last_body'] or 'No messages yet' }}</div>
-          </div>
-          <div class="text-right ml-2">
-            <div class="small text-muted">{{ (c['last_at'] or c['created_at'])|timeago }}</div>
-            {% if c['unread'] %}<span class="badge badge-primary badge-pill">{{ c['unread'] }}</span>{% endif %}
-          </div>
-        </a>
+        {% for c in chats %}{{ chat_row(c) }}
         {% else %}
         <div class="list-group-item text-muted">
           No conversations yet. Open someone's profile from <a href="{{ url_for('views.index') }}">people</a>
-          and press "Message".
+          and press "Message" to ask them to chat, or ask someone going to the same gig.
         </div>
         {% endfor %}
       </div>
@@ -50,6 +67,29 @@
         <span class="text-muted small ml-2">@{{ conv['other_username'] }}</span>
       </div>
 
+      {% if state == 'request' %}
+      <div class="request-banner p-3 border-bottom">
+        <div class="mb-2"><strong>{{ conv['other_name'] }}</strong> would like to send you messages. Nothing can be sent
+          until you accept.</div>
+        <form class="d-inline" method="POST" action="{{ url_for('conversations.accept', conversation_id=conv['id']) }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <button class="btn btn-primary btn-sm" type="submit">Accept</button>
+        </form>
+        <form class="d-inline" method="POST" action="{{ url_for('conversations.decline', conversation_id=conv['id']) }}"
+              data-confirm="Decline this request? They will not be told.">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <button class="btn btn-outline-dark btn-sm" type="submit">Decline</button>
+        </form>
+        <form class="d-inline" method="POST" action="{{ url_for('moderation.block', user_id=conv['other_id']) }}"
+              data-confirm="Block {{ conv['other_username'] }}?">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <input type="hidden" name="next" value="{{ url_for('conversations.inbox') }}">
+          <button class="btn btn-link btn-sm text-muted" type="submit">Block</button>
+        </form>
+        <a class="btn btn-link btn-sm text-muted" href="{{ url_for('moderation.report', target_type='user', target_id=conv['other_id']) }}">Report</a>
+      </div>
+      {% endif %}
+
       <div id="messages" class="chat-messages">
         {% for m in messages %}
         <div class="message {{ 'mine' if m['sender_id'] == g.user['id'] else 'theirs' }}" data-id="{{ m['id'] }}">
@@ -57,10 +97,12 @@
           <div class="meta" data-utc="{{ m['created_at'] }}">{{ m['created_at'] }} UTC</div>
         </div>
         {% endfor %}
-        {% if not messages %}<p id="empty" class="text-muted text-center my-auto">No messages yet, say hello!</p>{% endif %}
+        {% if state == 'request' %}<p class="text-muted text-center my-auto">Accept the request to start chatting.</p>
+        {% elif state == 'waiting' %}<p class="text-muted text-center my-auto">Request sent. {{ conv['other_name'] }} has to accept it before you can write.</p>
+        {% elif not messages %}<p id="empty" class="text-muted text-center my-auto">No messages yet, say hello!</p>{% endif %}
       </div>
 
-      {% if can_message %}
+      {% if can_message and can_write %}
       <form id="chat-form" class="chat-form" method="POST"
             action="{{ url_for('conversations.thread', conversation_id=conv['id']) }}">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
@@ -71,6 +113,10 @@
           <button id="chat-send" class="btn btn-primary ml-2" type="submit">Send</button>
         </div>
       </form>
+      {% elif can_message and state == 'request' %}
+      <div class="chat-form p-3 text-center text-muted small">Accept the request above to chat with {{ conv['other_name'] }}.</div>
+      {% elif can_message %}
+      <div class="chat-form p-3 text-center text-muted small">Your request was sent. You can write once {{ conv['other_name'] }} accepts it.</div>
       {% else %}
       <div class="chat-form p-3 text-center text-muted small">You cannot send messages in this chat (blocked or suspended).</div>
       {% endif %}
@@ -85,4 +131,4 @@
   </div>
 </div>
 {% endblock %}
-{% block scripts %}{% if conv and can_message %}<script src="{{ asset('js/chat.js') }}"></script>{% endif %}{% endblock %}
+{% block scripts %}{% if conv and can_message and can_write %}<script src="{{ asset('js/chat.js') }}"></script>{% endif %}{% endblock %}

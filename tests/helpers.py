@@ -14,7 +14,8 @@ PASSWORD = "S3cret!pw"
 
 def make_app(tmp_path, **config):
     """A fresh app on its own temp database and photo folder."""
-    base = {"TESTING": True, "INSTANCE_PATH": str(tmp_path / "instance"),
+    base = {"TESTING": True, "NEW_MEMBER_HOLD_POSTS": 0, "NEW_MEMBER_HOLD_HOURS": 0, "DEFAULT_WORD_LISTS": "",   # the new-member rules are tested on their own
+            "INSTANCE_PATH": str(tmp_path / "instance"),
             "DATABASE_URL": "sqlite:///" + str(tmp_path / "t.sqlite"),
             "UPLOAD_DIR": str(tmp_path / "uploads")}
     return create_app({**base, **config})
@@ -31,7 +32,8 @@ def token_of(client, url="/users/signin"):
 
 def signup(client, username="bacco", **over):
     data = {"username": username, "name": username.title() + " Test", "email": username + "@example.com",
-            "password": PASSWORD, "about": "I like rock", "accept": "1", "kind": "fan", **over}
+            "password": PASSWORD, "about": "I like rock", "accept": "1", "kind": "fan",
+            "birth_date": "1990-05-15", **over}
     data["_csrf"] = token_of(client, "/users/add")
     return client.post("/users/add", data=data, follow_redirects=True)
 
@@ -74,6 +76,10 @@ def scalar(app, statement, **params):
 
 def make_admin(app, username):
     sql(app, "UPDATE users SET role = 'admin' WHERE username = :u", u=username)
+
+
+def make_moderator(app, username):
+    sql(app, "UPDATE users SET role = 'moderator' WHERE username = :u", u=username)
 
 
 def outbox(app):

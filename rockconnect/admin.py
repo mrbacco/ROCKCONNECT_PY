@@ -1,16 +1,18 @@
 # File: admin.py
 # Author: mrbacco04@gmail.com
 # Date: 2026-10-05
-"""Admin console (/admin): the report queue, member list with ban / unban / delete, and the audit log.
+"""Admin console (/admin): the review queue, the report queue, member list with ban / unban / delete, the blocked-words
+list and the audit log.
 
-Only accounts with role "admin" get in (everyone else sees a 404, the console does not advertise itself).
-Make an admin on the command line:  flask make-admin <username>
+Admins get all of it. Moderators (role "moderator") get only the review queue and the reports, and cannot suspend or erase
+anyone. Everyone else sees a 404, the console does not advertise itself.
+Make an admin or moderator on the command line:  flask make-admin <username>  /  flask make-moderator <username>
 """
 import functools
 
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
 
-from . import modlog, session_store
+from . import modlog, review, session_store
 from .account import delete_account_data
 from .auth import login_required
 from .baclog import bac_log
@@ -31,6 +33,26 @@ def admin_required(view):
         return view(**kwargs)
 
     return wrapped
+
+
+def moderator_required(view):
+    """Admins and moderators."""
+    @functools.wraps(view)
+    @login_required
+    def wrapped(**kwargs):
+        if g.user["role"] not in ("admin", "moderator"):
+            bac_log("admin", "user id=%s is not staff -> 404" % g.user["id"])
+            abort(404)
+        return view(**kwargs)
+
+    return wrapped
+
+
+@bp.app_context_processor
+def inject_review_count():
+    """The number next to 'Review' in the menu of admins and moderators."""
+    user = getattr(g, "user", None)
+    return {"review_count": review.open_count() if review.is_staff(user) else 0}
 
 
 def ban_user(user_id, reason):
@@ -63,6 +85,7 @@ def dashboard():
         "banned": count("SELECT count(*) FROM users WHERE status = 'banned'"),
         "posts": count("SELECT count(*) FROM posts"),
         "open_reports": count("SELECT count(*) FROM reports WHERE status = 'open'"),
+        "to_review": count("SELECT count(*) FROM review_items WHERE status = 'open'"),
     }
     log = execute("SELECT * FROM mod_log ORDER BY id DESC LIMIT 15").mappings().fetchall()
     recent = execute("SELECT id, username, kind, created_at FROM users ORDER BY id DESC LIMIT 8").mappings().fetchall()
@@ -70,7 +93,7 @@ def dashboard():
 
 
 @bp.route("/reports")
-@admin_required
+@moderator_required
 def report_queue():
     status = "closed" if request.args.get("status") == "closed" else "open"
     rows = execute(
@@ -78,11 +101,11 @@ def report_queue():
         " FROM reports r JOIN users ru ON ru.id = r.reporter_id"
         " LEFT JOIN users tu ON tu.id = r.target_user_id"
         " WHERE r.status = :s ORDER BY r.id DESC LIMIT 100", s=status).mappings().fetchall()
-    return render_template("admin_reports.html", reports=rows, status=status)
+    return render_template("admin_reports.html", reports=rows, status=status, is_admin=g.user["role"] == "admin")
 
 
 @bp.route("/reports/<int:report_id>/resolve", methods=("POST",))
-@admin_required
+@moderator_required
 def resolve_report(report_id):
     rep = execute("SELECT * FROM reports WHERE id = :id", id=report_id).mappings().fetchone()
     if rep is None:
@@ -90,6 +113,8 @@ def resolve_report(report_id):
     action = request.form.get("action")
     if action not in ("dismiss", "remove", "remove_ban"):
         abort(400)
+    if action == "remove_ban" and g.user["role"] != "admin":
+        abort(403)      # moderators remove content; only admins suspend people
     resolution = {"dismiss": "dismissed", "remove": "removed", "remove_ban": "removed_banned"}[action]
 
     if action in ("remove", "remove_ban"):
@@ -101,16 +126,25 @@ def resolve_report(report_id):
                 commit()
                 remove_image(post["image_filename"])
                 modlog.record("remove_post", "post %d" % post["id"], "report #%d" % report_id)
+        elif rep["target_type"] == "gigcomment":
+            execute("DELETE FROM gig_comments WHERE id = :id", id=rep["target_id"])
+            commit()
+            modlog.record("remove_gig_comment", "gig comment %d" % rep["target_id"], "report #%d" % report_id)
         elif rep["target_type"] == "comment":
             execute("DELETE FROM comments WHERE id = :id", id=rep["target_id"])
             commit()
             modlog.record("remove_comment", "comment %d" % rep["target_id"], "report #%d" % report_id)
+        if rep["target_type"] in review.TARGETS:
+            review.close_open_items(rep["target_type"], rep["target_id"], "removed", g.user["id"])
         if action == "remove_ban" and rep["target_user_id"]:
             target = execute("SELECT id, role FROM users WHERE id = :id", id=rep["target_user_id"]).mappings().fetchone()
             if target is not None and target["role"] != "admin":
                 ban_user(target["id"], "report #%d (%s)" % (report_id, rep["reason"]))
             else:
                 resolution = "removed"
+
+    if action == "dismiss" and rep["target_type"] in review.TARGETS:
+        review.restore_if_hidden(rep["target_type"], rep["target_id"], g.user)    # reports had hidden it: it comes back
 
     # every open report about the same thing is settled together
     execute("UPDATE reports SET status = 'closed', resolution = :res, resolved_by = :by, resolved_at = :now"
@@ -120,6 +154,108 @@ def resolve_report(report_id):
     modlog.record("report_" + resolution, "report #%d" % report_id)
     flash("Report #%d closed (%s)." % (report_id, resolution), "success")
     return redirect(url_for("admin.report_queue"))
+
+
+# ------------------------------------------------------------------ the review queue
+@bp.route("/review")
+@moderator_required
+def review_queue():
+    return render_template("admin_review.html", items=review.open_items(), is_admin=g.user["role"] == "admin")
+
+
+def _open_item_or_404(item_id):
+    item = execute("SELECT * FROM review_items WHERE id = :id", id=item_id).mappings().fetchone()
+    if item is None:
+        abort(404)
+    if item["status"] != "open":
+        flash("Someone already dealt with that one.", "info")
+        return None
+    return item
+
+
+@bp.route("/review/<int:item_id>/approve", methods=("POST",))
+@moderator_required
+def review_approve(item_id):
+    item = _open_item_or_404(item_id)
+    if item is not None:
+        review.approve(item["target_type"], item["target_id"], g.user)
+        flash("Approved: it is visible now.", "success")
+    return redirect(url_for("admin.review_queue"))
+
+
+@bp.route("/review/<int:item_id>/remove", methods=("POST",))
+@moderator_required
+def review_remove(item_id):
+    item = _open_item_or_404(item_id)
+    if item is None:
+        return redirect(url_for("admin.review_queue"))
+    ban = request.form.get("also_suspend") == "1"
+    if ban and g.user["role"] != "admin":
+        abort(403)
+    author_id = review.remove(item["target_type"], item["target_id"], g.user,
+                              "removed_banned" if ban else "removed")
+    if ban and author_id:
+        target = execute("SELECT id, role FROM users WHERE id = :id", id=author_id).mappings().fetchone()
+        if target is not None and target["role"] != "admin":
+            ban_user(author_id, "review item #%d (%s)" % (item_id, item["reason"]))
+    flash("Removed.", "success")
+    return redirect(url_for("admin.review_queue"))
+
+
+# ------------------------------------------------------------------ the blocked-words list
+@bp.route("/words", methods=("GET", "POST"))
+@admin_required
+def words():
+    if request.method == "POST":
+        word = review.clean_word(request.form.get("word", ""))
+        if len(word) < 2:
+            flash("Type a word or phrase of at least 2 letters.", "warning")
+        elif (execute("SELECT count(*) FROM blocked_words").scalar() or 0) >= review.MAX_WORDS:
+            flash("The list is full (%d entries). Remove some first." % review.MAX_WORDS, "warning")
+        elif execute("SELECT 1 FROM blocked_words WHERE word = :w", w=word).fetchone():
+            flash("That one is already on the list.", "info")
+        else:
+            execute("INSERT INTO blocked_words (word, created_by, created_at) VALUES (:w, :u, :now)",
+                    w=word, u=g.user["id"], now=now_str())
+            commit()
+            modlog.record("add_blocked_word", word)
+            flash("Added. New posts and comments with it now wait for review.", "success")
+        return redirect(url_for("admin.words"))
+    rows = execute("SELECT id, word, created_at FROM blocked_words ORDER BY word").mappings().fetchall()
+    have = {r["word"] for r in rows}
+    packs = [(code, name, sum(1 for w in review.wordlists.entries(code) if review.clean_word(w) not in have), kind)
+             for code, name, _, kind in review.wordlists.languages()]
+    return render_template("admin_words.html", words=rows, limit=review.MAX_WORDS, packs=packs)
+
+
+@bp.route("/words/starter", methods=("POST",))
+@admin_required
+def words_starter():
+    code = request.form.get("lang", "")
+    if not review.wordlists.has(code):
+        abort(400)
+    added = review.add_starter_list(code, g.user["id"])
+    commit()
+    if added:
+        modlog.record("add_word_list", code, "%d words" % added)
+        flash("Added %d %s words. Look through them and remove any that do not suit your community." % (
+            added, review.wordlists.name(code)), "success")
+    else:
+        flash("Nothing new to add from that list.", "info")
+    return redirect(url_for("admin.words"))
+
+
+@bp.route("/words/<int:word_id>/delete", methods=("POST",))
+@admin_required
+def words_delete(word_id):
+    row = execute("SELECT word FROM blocked_words WHERE id = :id", id=word_id).fetchone()
+    if row is None:
+        abort(404)
+    execute("DELETE FROM blocked_words WHERE id = :id", id=word_id)
+    commit()
+    modlog.record("remove_blocked_word", row[0])
+    flash("Removed from the list.", "info")
+    return redirect(url_for("admin.words"))
 
 
 @bp.route("/hidden")

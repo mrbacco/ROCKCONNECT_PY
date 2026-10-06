@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 import re
 
-from . import importer, ratelimit
+from . import follows, importer, ratelimit, social, taxonomy
 from .auth import login_required, send_verification
 from .baclog import bac_log
 from .db import KINDS, commit, execute, rollback
@@ -16,6 +16,10 @@ from .feed import load_posts
 from .util import clean_website, valid_email
 
 bp = Blueprint("views", __name__)
+
+
+def user_hides_plans(user_id):
+    return bool(execute("SELECT hide_plans FROM users WHERE id = :id", id=user_id).scalar())
 
 
 def is_admin():
@@ -36,25 +40,17 @@ def home():
 @bp.route("/people")
 @login_required
 def index():
-    """The directory: ?q= filters by username, name or location, ?kind= by fan / band / venue."""
+    """The directory: ?q= username / name / place, ?kind= fan / band / venue, and by what people play, like and look for."""
     q = request.args.get("q", "").strip()
     kind = request.args.get("kind", "")
-    where, params = [], {}
-    if not is_admin():
-        where.append("status = 'active'")  # suspended accounts disappear from the directory
-    if q:
-        # lower() on both sides = case-insensitive on every database (LIKE is case-sensitive on PostgreSQL)
-        where.append("(lower(username) LIKE :p OR lower(name) LIKE :p OR lower(COALESCE(location, '')) LIKE :p)")
-        params["p"] = "%" + q.lower() + "%"
-    if kind in KINDS:
-        where.append("kind = :kind")
-        params["kind"] = kind
-    users = execute(
-        "SELECT id, username, name, kind, location, status FROM users"
-        + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY username", **params
-    ).mappings().fetchall()
-    bac_log("index", "search q=%r kind=%r -> %d user(s)" % (q, kind, len(users)))
-    return render_template("index.html", title="rockconnect", users=users, q=q, kind=kind)
+    filters = {name: request.args.get(name, "") for name in ("instrument", "genre", "goal", "level")}
+    relation = request.args.get("relation") if request.args.get("relation") in ("following", "followers") else ""
+    users = social.search_people(g.user, filters, q, kind, include_suspended=is_admin(), limit=200, relation=relation)
+    bac_log("index", "search q=%r kind=%r filters=%s -> %d user(s)" % (
+        q, kind, ",".join(k for k, v in filters.items() if v) or "none", len(users)))
+    return render_template("index.html", title="rockconnect", users=users, q=q, kind=kind, filters=filters, relation=relation,
+                           instruments=taxonomy.INSTRUMENTS, genres=taxonomy.GENRES, goals=taxonomy.GOALS,
+                           levels=taxonomy.LEVELS)
 
 
 @bp.route("/users_list/<int:user_id>")
@@ -77,10 +73,19 @@ def profile(user_id):
                        " OR (blocker_id = :u AND blocked_id = :me)", me=g.user["id"], u=user_id).fetchall()
         i_blocked = any(r[0] == g.user["id"] for r in pair)
         blocked_me = any(r[0] == user_id for r in pair)
+    plans = []
+    if g.user and not user_hides_plans(user_id):
+        plans = social.my_plans(user_id, g.user["id"])      # only the public ones, and none from a blocked member
+        if i_blocked or blocked_me:
+            plans = []
     return render_template("users_list.html", user=user, posts=wall,
                            comments_by_post=comments_by_post, has_more=has_more,
                            next_before=wall[-1]["id"] if has_more else None,
-                           i_blocked=i_blocked, blocked_me=blocked_me)
+                           i_blocked=i_blocked, blocked_me=blocked_me, tags=social.user_tags(user_id), plans=plans,
+                           follower_count=follows.counts(user_id)[0], following_count=follows.counts(user_id)[1],
+                           i_follow=bool(g.user) and follows.is_following(g.user["id"], user_id),
+                           instruments=taxonomy.INSTRUMENTS, genres=taxonomy.GENRES, goals=taxonomy.GOALS,
+                           attendance=social.post_attendance(wall, g.user["id"]) if g.user else {})
 
 
 def _bandsintown_form(kind):
@@ -137,6 +142,12 @@ def edit():
             error = "Choose fan, band or venue."
         elif len(name) > 120 or len(about) > 1000 or len(location) > 120:
             error = "Something you typed is too long."
+        ticked = taxonomy.only_valid(request.form.getlist("instruments"), taxonomy.INSTRUMENTS)
+        instruments = {key: request.form.get("level_" + key, "") for key in ticked}      # key -> level (or empty)
+        music_genres = taxonomy.only_valid(request.form.getlist("genres"), taxonomy.GENRES)
+        goals = taxonomy.only_valid(request.form.getlist("goals"), taxonomy.GOALS)
+        hide_plans = 1 if request.form.get("hide_plans") == "1" else 0
+        notify_friends = 1 if request.form.get("notify_friends_going") == "1" else 0
         bit_error, bit_changes = _bandsintown_form(kind)
         error = error or bit_error
         if not error and email != g.user["email"].lower() and execute(
@@ -155,17 +166,19 @@ def edit():
             try:
                 execute(
                     "UPDATE users SET name = :name, about = :about, location = :location,"
-                    " website = :website, kind = :kind" +
+                    " website = :website, kind = :kind, hide_plans = :hide_plans,"
+                    " notify_friends_going = :notify_friends" +
                     (", email = :email, email_verified = 0" if change_now else "") +
                     (", bandsintown_artist = :bi_artist, bandsintown_app_id = :bi_app" if bit_changes else "") +
                     " WHERE id = :id",
                     name=name, about=about, location=location or None, website=website or None,
-                    kind=kind, email=email, id=g.user["id"],
+                    kind=kind, email=email, id=g.user["id"], hide_plans=hide_plans, notify_friends=notify_friends,
                     bi_artist=(bit_changes or {}).get("bandsintown_artist"), bi_app=(bit_changes or {}).get("bandsintown_app_id"),
                 )
                 if bit_changes and not bit_changes["bandsintown_artist"]:
                     execute("DELETE FROM external_events WHERE user_id = :u", u=g.user["id"])   # disconnected: forget its dates
                 commit()
+                social.save_tags(g.user["id"], instruments, music_genres, goals)
             except IntegrityError:  # someone took that address a moment ago
                 rollback()
                 bac_log("edit", "rejected, email already used by another account")
@@ -184,4 +197,5 @@ def edit():
                     if note:
                         flash(note, "info")
                 return redirect(url_for("views.profile", user_id=g.user["id"]))
-    return render_template("edit.html")
+    return render_template("edit.html", tags=social.user_tags(g.user["id"]), instruments=taxonomy.INSTRUMENTS,
+                           genres=taxonomy.GENRES, goals=taxonomy.GOALS)

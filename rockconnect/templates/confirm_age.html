@@ -1,0 +1,35 @@
+{#
+  File: confirm_age.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-06
+#}
+{% extends "layout.html" %}
+{% from "_macros.html" import brand with context %}
+{% block title %}Confirm your age - {{ site.name }}{% endblock %}
+{% block body_class %}bkimg{% endblock %}
+{% block container_class %}container landing{% endblock %}
+{% block content %}
+<div class="landing-card card rc-card">
+  <div class="card-body p-4">
+    <h1 class="landing-title text-center"><a class="brand" href="{{ url_for('views.home') }}">{{ brand() }}</a></h1>
+    <h2 class="h4 text-center mb-3">One quick thing</h2>
+    <p class="text-muted">{{ site.name }} is for people aged {{ site.min_age }} and over. Please enter your date of birth. It is only
+      used to check your age, it is never shown to anyone, and you cannot change it afterwards.</p>
+    <form method="POST" action="{{ url_for('account.confirm_age') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <div class="form-group">
+        <label for="birth_date">Date of birth</label>
+        <input id="birth_date" class="form-control" type="date" name="birth_date" required autofocus>
+      </div>
+      <button class="btn btn-primary btn-block" type="submit">Continue</button>
+    </form>
+    <hr>
+    <form method="POST" action="{{ url_for('auth.signout') }}" class="text-center">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <button class="btn btn-link btn-sm" type="submit">Sign out instead</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block footer %}{% include "_legal_links.html" %}{% endblock %}

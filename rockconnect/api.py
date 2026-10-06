@@ -6,18 +6,18 @@
 GET /api/v1/meta           public: API version, branding and which features this site has (for apps)
 GET /api/v1/gigs/nearby    upcoming gigs close to a position, nearest first: gigs announced by members
                            plus gigs imported from the event providers
+The social endpoints (going, who is going, people search, my gigs, lists) are in social.py, same prefix.
 
 The version is in the URL on purpose: an installed mobile app cannot be force-updated, so what /api/v1
 answers must not change in a way that breaks it. Add fields freely; to change or remove one, make /api/v2.
 """
 import functools
 import math
-import re
 from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, current_app, g, jsonify, request, url_for
 
-from . import __version__, geo, importer, ratelimit
+from . import __version__, geo, gigmatch, importer, ratelimit, taxonomy
 from .baclog import bac_log
 from .db import execute
 from .feed import POST_SELECT, VISIBLE_AUTHOR
@@ -52,7 +52,7 @@ class ApiError(Exception):
         self.message, self.code, self.status = message, code, status
 
 
-@bp.errorhandler(ApiError)
+@bp.app_errorhandler(ApiError)
 def api_error(exc: ApiError):
     return jsonify(error=exc.message, code=exc.code), exc.status
 
@@ -112,7 +112,7 @@ def _center() -> tuple[float, float]:
 def _community_gigs(lat, lon, radius, box, since, until):
     """Gigs announced by members (posts with a date and a position)."""
     min_lat, max_lat, min_lon, max_lon = box
-    sql = (POST_SELECT + " AND p.event_at IS NOT NULL AND p.event_at >= :since AND p.event_at <= :until"
+    sql = (POST_SELECT + " AND p.mod_state = 'ok' AND p.event_at IS NOT NULL AND p.event_at >= :since AND p.event_at <= :until"
            " AND p.latitude BETWEEN :min_lat AND :max_lat")
     params = {"me": g.user["id"], "since": since, "until": until, "min_lat": min_lat, "max_lat": max_lat}
     if min_lon is not None:
@@ -122,7 +122,8 @@ def _community_gigs(lat, lon, radius, box, since, until):
         distance = geo.distance_km(lat, lon, row["latitude"], row["longitude"])
         if distance <= radius:
             yield {
-                "source": "community", "id": row["id"], "title": row["author_name"],
+                "source": "community", "id": row["id"], "ref": str(row["id"]), "genre_key": row["genre"],
+                "title": row["author_name"],
                 "url": url_for("feed.single_post", post_id=row["id"]), "ticket_url": None,
                 "body": row["body"][:300], "event_at": row["event_at"], "event_label": event_time(row["event_at"]),
                 "place": row["event_place"], "latitude": row["latitude"], "longitude": row["longitude"],
@@ -151,7 +152,8 @@ def _external_events(lat, lon, radius, box, since, until):
             band = ({"id": row["user_id"], "username": row["author_username"], "name": row["author_name"],
                      "kind": row["author_kind"]} if row["user_id"] else None)
             yield {
-                "source": row["source"], "id": row["id"], "title": row["title"],
+                "source": row["source"], "id": row["id"], "ref": row["external_id"],
+                "genre_key": taxonomy.genre_key(row["genre"]), "title": row["title"],
                 "url": url_for("events.event_page", event_id=row["id"]), "ticket_url": row["ticket_url"],
                 "body": row["genre"] or "", "event_at": row["event_at"],
                 "event_label": event_label(row["event_at"], row["time_known"]),
@@ -162,34 +164,9 @@ def _external_events(lat, lon, radius, box, since, until):
             }
 
 
-# ------------------------------------------------------------------ the same gig listed twice
-_FILLER = {"the", "and", "live", "tour", "with", "at", "in", "of", "a", "an", "presents", "ft", "feat", "featuring",
-           "tickets", "night", "show", "support", "special", "guest", "guests"}
-_SOURCE_RANK = {"community": 0, "ticketmaster": 1, "skiddle": 2, "songkick": 3, "bandsintown": 4}
-
-
-def _words(text):
-    return {w for w in re.findall(r"[^\W_]+", (text or "").lower()) if len(w) > 1 and w not in _FILLER}
-
-
-def _same_gig(a, b):
-    """The same concert listed by two DIFFERENT sources: same day, within ~300 m, and sharing most of the name.
-    Two entries of one source are distinct events (a matinee and an evening show, two bands at one festival)."""
-    if a["source"] == b["source"] or a["event_at"][:10] != b["event_at"][:10]:
-        return False
-    if abs(a["latitude"] - b["latitude"]) > 0.003 or abs(a["longitude"] - b["longitude"]) > 0.005:
-        return False
-    wa, wb = _words(a["title"]), _words(b["title"])
-    return bool(wa and wb) and len(wa & wb) / min(len(wa), len(wb)) >= 0.5
-
-
-def _remove_duplicates(gigs):
-    """Keep one entry per concert. Gigs announced by members come first, then the providers in a fixed order."""
-    kept = []
-    for gig in sorted(gigs, key=lambda x: _SOURCE_RANK.get(x["source"], 9)):
-        if not any(_same_gig(gig, other) for other in kept):
-            kept.append(gig)
-    return kept
+# the same concert listed twice is recognised in gigmatch.py (also used for 'who is going')
+_same_gig = gigmatch.same_gig
+_remove_duplicates = gigmatch.remove_duplicates
 
 
 def _admin_hint():
@@ -206,7 +183,7 @@ def _admin_hint():
                 "Run: flask --app wsgi import-events")
     names = ", ".join(p.label for p in importer.enabled_providers(cfg))
     return ("Admin hint: %s listed nothing here. Each provider covers only some countries (Ticketmaster: not France, "
-            "Japan or India; Skiddle: UK and Ireland only). Add SONGKICK_API_KEY for worldwide coverage "
+            "Japan or India; Skiddle: UK and Ireland only). Add SONGKICK_API_KEY or PREDICTHQ_API_KEY for worldwide coverage "
             "(docs/EVENT-IMPORT.md); members can also announce gigs themselves." % names)
 
 
@@ -220,7 +197,9 @@ def meta():
         site={"name": cfg["SITE_NAME"], "tagline": cfg["SITE_TAGLINE"], "accent_color": cfg["ACCENT_COLOR"],
               "contact": cfg["CONTACT_EMAIL"]},
         features={"nearby_gigs": True, "imported_events": bool(sources), "event_sources": sources,
-                  "place_search": cfg["GEOCODER"] != "none"})
+                  "place_search": cfg["GEOCODER"] != "none", "going": True, "people_search": True,
+                  "message_requests": True, "follows": True, "notifications": True, "skill_levels": True,
+                  "gig_comments": True, "calendar": True, "age_check": True})
 
 
 @bp.route("/gigs/nearby")
@@ -237,6 +216,9 @@ def nearby_gigs():
     source = request.args.get("source", "all")
     if source not in SOURCES:
         raise ApiError("source must be all, community or external.", "bad_source")
+    genre = request.args.get("genre", "")
+    if genre and genre not in taxonomy.GENRES:
+        raise ApiError("genre must be one of the keys of /api/v1/lists.", "bad_genre")
 
     if source in ("all", "external"):
         try:   # first search around a new place: fetch that area from the providers (see importer.ensure_coverage)
@@ -255,11 +237,20 @@ def nearby_gigs():
     if source in ("all", "external"):
         gigs.extend(_external_events(lat, lon, radius, box, since, until))
     gigs = _remove_duplicates(gigs)
+    if genre:
+        gigs = [x for x in gigs if x["genre_key"] == genre]
     gigs.sort(key=(lambda x: (x["distance_km"], x["event_at"])) if sort == "distance"
               else (lambda x: (x["event_at"], x["distance_km"])))
     total = len(gigs)
+    shown = gigs[:limit]
+    from . import social    # imported here: social.py itself imports this module
+    plans = social.counts_for(shown, g.user["id"])
+    for item in shown:      # who is going, for the Going button and the "12 going" label
+        entry = plans[(item["source"], item["ref"])]
+        item["going_count"], item["interested_count"], item["my_status"] = entry["going"], entry["interested"], entry["mine"]
+        item["friends_going"] = entry["friends_going"]
     response = jsonify(center={"latitude": round(lat, 4), "longitude": round(lon, 4)}, radius_km=radius,
-                       sort=sort, source=source, total=total, count=min(total, limit), gigs=gigs[:limit],
+                       sort=sort, source=source, total=total, count=min(total, limit), gigs=shown,
                        hint=_admin_hint() if total == 0 else None)
     response.headers["Cache-Control"] = "no-store"   # depends on where the member is: never cache it
     bac_log("api", "nearby gigs: %d found within %.0f km" % (total, radius))   # no coordinates in the log

@@ -72,6 +72,53 @@ Errors: `location_required`, `bad_coordinates`, `bad_radius_km`, `bad_days`, `ba
 `no_profile_location` (400), `place_not_found` (404), rate limit `429` (60 searches per 10 minutes, and 20 place-name
 lookups per hour, per member).
 
+## Going to gigs and finding people
+
+A gig is identified by `(source, ref)`: `source` is `community` (ref = the post id) or a provider (`ticketmaster`, `skiddle`, ...
+with the provider's own event id). Every item of `/gigs/nearby` carries `source`, `ref`, `genre_key`, `going_count`,
+`interested_count` and `my_status`. The same concert listed by two sources counts as one: people who said they are going on
+different listings see each other.
+
+| Endpoint | What it does |
+|---|---|
+| `POST /api/v1/gigs/<source>/<ref>/attendance` | form fields `status` = `going`, `interested` or `none`; and/or `visible` = `0` / `1` (private = counted but not named). Answer: `status`, `visible`, `going_count`, `interested_count` |
+| `GET /api/v1/gigs/<source>/<ref>/attendees` | who else is going, by name. Filters: `instrument`, `genre`, `goal` (keys from `/lists`), `rsvp` = `going` / `interested` |
+| `GET /api/v1/people` | search members: `q`, `kind`, `instrument`, `genre`, `goal`, `limit` (max 100), `offset` |
+| `GET /api/v1/me/gigs` | my upcoming plans |
+| `GET /api/v1/lists` (public) | the fixed lists of instruments, genres and goals, with labels. Never rename a key; keys may be added |
+| `GET /api/v1/gigs/nearby?genre=jazz` | the nearby search also filters by genre |
+
+A person in these answers has `id`, `username`, `name`, `kind`, `location`, `instruments`, `genres`, `goals` (and `status` in
+attendee lists); never an e-mail address. Members who are suspended, who blocked you or whom you blocked, who hid all their plans,
+or whose RSVP is private are not listed (private RSVPs are still counted). Errors: `bad_status`, `gig_not_found` (404),
+`gig_over`, `bad_instrument`, `bad_genre`, `bad_goal`, `missing_status`; `429` when too many requests.
+
+### Follows, notifications, gig discussion
+
+| Endpoint | What it does |
+|---|---|
+| `POST /api/v1/people/<id>/follow`, `.../unfollow` | answer `following` (true/false) and `followers` (count) |
+| `GET /api/v1/me/following`, `GET /api/v1/me/followers` | the people, in the same shape as `/people` |
+| `GET /api/v1/notifications` | `unread`, `count`, `notifications`: `id`, `kind` (`follow`, `going`), `text`, `url`, `created_at`, `read` |
+| `POST /api/v1/notifications/read` | mark all as read; answer `unread` = 0 |
+| `GET /api/v1/gigs/<source>/<ref>/comments` | the discussion: `total`, `comments` (`id`, `body`, `created_at`, `mine`, `author`) oldest first, last 100 |
+| `POST /api/v1/gigs/<source>/<ref>/comments` | form field `body` (max 1000 characters); `201` with `id` |
+| `POST /api/v1/gig-comments/<id>/delete` | the author or an admin; `403 forbidden` for others |
+
+`/people`, `/gigs/.../attendees` and `/me/following` also take `level` (`beginner`, `intermediate`, `advanced`, `pro`, meaning
+"at least", together with `instrument`), `/people` takes `relation` = `following` or `followers`, and persons carry
+`instrument_levels` (instrument -> level or null) and `following`. Attendee lists put people you follow first, and the counts carry
+`friends_going`. Calendar files are plain web downloads (`GET /gigs/<source>/<ref>.ics`, `GET /gigs/mine.ics`), not JSON.
+`GET /api/v1/lists` now also returns `levels`. Errors: `bad_level`, `empty`, `too_long`, `closed` (the gig is long over), `email_not_confirmed`,
+`not_found`, `forbidden`.
+
+Every API call answers `403 age_required` for a member who has not given a date of birth yet (an older account): send them to
+the website's *confirm your date of birth* page, or add that screen to the app. `/meta` lists the feature flags `follows`,
+`notifications`, `skill_levels`, `gig_comments`, `calendar` and `age_check`.
+
+State-changing calls are `POST` with the CSRF token (`_csrf`) while the API still uses the website cookie; the planned token sign-in
+for the Android app replaces that (see ANDROID.md).
+
 ## How a member's gig gets its position
 1. **The location button** in the gig form (best when posting from the venue): the browser sends exact coordinates.
 2. **The place name**, if no coordinates were sent: it is looked up with the geocoder (`GEOCODER`, default

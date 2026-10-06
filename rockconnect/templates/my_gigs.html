@@ -1,0 +1,31 @@
+{#
+  File: my_gigs.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-06
+#}
+{% extends "layout.html" %}
+{% block title %}My gigs - {{ site.name }}{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-lg-6 offset-lg-3 col-md-8 offset-md-2">
+    <h2>My gigs</h2>
+    <p class="text-muted">The gigs you are going to or interested in. Other members see the ones you left public.
+      {% if plans %}<a class="btn btn-outline-primary btn-sm ml-2" href="{{ url_for('ical.mine_file') }}">&#128197; Add all to my calendar (.ics)</a>{% endif %}</p>
+    <div class="card rc-card">
+      <ul class="list-group list-group-flush">
+        {% for p in plans %}
+        <li class="list-group-item d-flex align-items-center">
+          <div class="flex-grow-1">
+            {% if p.url %}<a class="author" href="{{ p.url }}#going">{{ p.title }}</a>{% else %}<span class="author">{{ p.title }}</span>{% endif %}
+            <div class="small gig-when">{{ p.label }}{% if p.venue %} &middot; {{ p.venue }}{% endif %}{% if p.city %}, {{ p.city }}{% endif %}</div>
+          </div>
+          <span class="chip {{ 'chip-instrument' if p.status == 'going' else 'chip-goal' }}">{{ p.status }}{% if not p.visible %} &middot; private{% endif %}</span>
+        </li>
+        {% else %}
+        <li class="list-group-item text-muted">No plans yet. Find a gig on the <a href="{{ url_for('feed.gigs') }}">gig board</a> and press <em>Going</em>.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

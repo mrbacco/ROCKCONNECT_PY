@@ -12,7 +12,7 @@ from flask import (Flask, abort, flash, jsonify, make_response, redirect, render
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import db, settings, storage
+from . import db, settings, storage, taxonomy
 from .baclog import bac_log
 from .util import asset, event_label, event_time, timeago
 
@@ -102,10 +102,10 @@ def create_app(test_config=None):
     db.init_app(app)
     storage.init_app(app)
 
-    from . import (account, admin, api, auth, cli, conversations, events, feed, legal, moderation,
-                   system, views)
+    from . import (account, admin, api, auth, cli, conversations, events, feed, follows, gigtalk, ical,
+                   legal, moderation, notifications, social, system, views)
 
-    for module in (auth, views, feed, conversations, moderation, admin, account, legal, system, api, events):
+    for module in (auth, views, feed, conversations, moderation, admin, account, legal, system, api, events, social, follows, notifications, gigtalk, ical):
         app.register_blueprint(module.bp)
     cli.init_app(app)
     bac_log("app", "blueprints registered")
@@ -202,7 +202,7 @@ def create_app(test_config=None):
             "operator": cfg["OPERATOR_NAME"], "address": cfg["OPERATOR_ADDRESS"],
             "contact": cfg["CONTACT_EMAIL"], "min_age": cfg["MIN_AGE"], "kinds": db.KINDS,
             "verification_required": cfg["REQUIRE_EMAIL_VERIFICATION"], "version": __version__,
-        }}
+        }, "genre_labels": taxonomy.GENRES, "level_labels": taxonomy.LEVELS}
 
     bac_log("app", "create_app() finished")
     return app

@@ -10,7 +10,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}{{ site.name }}{% endblock %}</title>
-  <meta name="theme-color" content="#0d0d0f">
+  <meta name="theme-color" content="#ffffff">
   <link rel="icon" type="image/svg+xml" href="{{ asset('images/favicon.svg') }}">
   <meta name="description" content="{{ site.tagline }}">
   {# Everything is served from this site (no CDN): fast, private for visitors and compatible with the strict security policy #}
@@ -24,7 +24,7 @@
   {# the menu bar only exists for signed-in members; visitors see just the page (landing, sign in, sign up) #}
   {% if g.user %}
   <header>
-    <nav class="navbar navbar-expand-lg navbar-dark navbar-rc sticky-top">
+    <nav class="navbar navbar-expand-xl navbar-light navbar-rc sticky-top">
       <a class="navbar-brand brand" href="{{ url_for('feed.index') }}">{{ brand() }}</a>
       <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarCollapse"
               aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,31 +32,40 @@
       </button>
       <div class="collapse navbar-collapse" id="navbarCollapse">
         <ul class="navbar-nav mr-auto">
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('feed.index') }}">feed</a></li>
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('feed.gigs') }}">gigs</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('feed.index') }}">Feed</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('feed.gigs') }}">Gigs</a></li>
           <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('conversations.inbox') }}">messages
+            <a class="nav-link" href="{{ url_for('conversations.inbox') }}">Messages
               <span id="unread-badge" class="badge badge-danger {% if not unread_count %}d-none{% endif %}"
                     data-url="{{ url_for('conversations.unread') }}">{{ unread_count }}</span>
             </a>
           </li>
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('views.index') }}">people</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('views.index') }}">People</a></li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('notifications.index') }}" title="Notifications">Alerts
+              <span id="notification-badge" class="badge badge-danger {% if not notification_count %}d-none{% endif %}">{{ notification_count }}</span>
+            </a>
+          </li>
           {% if g.user['role'] == 'admin' %}
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.dashboard') }}">admin</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.dashboard') }}">Admin
+            {% if review_count %}<span class="badge badge-danger" id="review-badge">{{ review_count }}</span>{% endif %}</a></li>
+          {% elif g.user['role'] == 'moderator' %}
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.review_queue') }}">Moderate
+            {% if review_count %}<span class="badge badge-danger" id="review-badge">{{ review_count }}</span>{% endif %}</a></li>
           {% endif %}
         </ul>
-        <form class="form-inline mt-2 mt-lg-0 mr-lg-2" method="GET" action="{{ url_for('views.index') }}">
+        <form class="form-inline mt-2 mt-xl-0 mr-xl-2" method="GET" action="{{ url_for('views.index') }}">
           <input class="form-control form-control-sm nav-search mr-sm-2" type="text" name="q" placeholder="Search people"
                  aria-label="Search" value="{{ request.args.get('q', '') }}">
           <button class="btn btn-primary btn-sm my-2 my-sm-0" type="submit">Search</button>
         </form>
-        <a class="nav-link text-white d-flex align-items-center" href="{{ url_for('views.profile', user_id=g.user['id']) }}">
+        <a class="nav-link d-flex align-items-center" href="{{ url_for('views.profile', user_id=g.user['id']) }}">
           {{ avatar(g.user['username'], g.user['id'], 'sm') }}<span class="ml-2 nav-name">{{ g.user['name'].split()[0] if g.user['kind'] == 'fan' else g.user['name'] }}</span>
         </a>
-        <a class="nav-link text-white" href="{{ url_for('account.settings') }}">account</a>
+        <a class="nav-link" href="{{ url_for('account.settings') }}">Account</a>
         <form class="form-inline" method="POST" action="{{ url_for('auth.signout') }}">
           <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-          <button class="btn btn-outline-light btn-sm" type="submit">sign out</button>
+          <button class="btn btn-outline-dark btn-sm" type="submit">Sign out</button>
         </form>
       </div>
     </nav>

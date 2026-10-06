@@ -5,6 +5,7 @@
 #}
 {% extends "layout.html" %}
 {% from "_macros.html" import avatar, kind_badge %}
+{% from "_social_macros.html" import tag_chips with context %}
 {% block title %}People - {{ site.name }}{% endblock %}
 {% block content %}
 <div class="row">
@@ -17,18 +18,55 @@
                               href="{{ url_for('views.index', kind=k, q=q or None) }}">{{ label }}</a></li>
       {% endfor %}
     </ul>
+    <ul class="nav nav-pills kind-filter mb-3">
+      <li class="nav-item"><a class="nav-link {{ 'active' if not relation }}" href="{{ url_for('views.index', kind=kind or None, q=q or None) }}">Everyone</a></li>
+      <li class="nav-item"><a class="nav-link {{ 'active' if relation == 'following' }}" href="{{ url_for('views.index', relation='following') }}">People I follow</a></li>
+      <li class="nav-item"><a class="nav-link {{ 'active' if relation == 'followers' }}" href="{{ url_for('views.index', relation='followers') }}">My followers</a></li>
+    </ul>
+    <form class="form-row people-filters mb-3" method="GET" action="{{ url_for('views.index') }}">
+      <input type="hidden" name="relation" value="{{ relation }}">
+      <input type="hidden" name="kind" value="{{ kind }}">
+      <input type="hidden" name="q" value="{{ q }}">
+      <div class="col-sm-4 mb-2">
+        <select class="form-control form-control-sm" name="instrument" aria-label="Plays">
+          <option value="">Plays anything</option>
+          {% for key, label in instruments.items() %}<option value="{{ key }}" {{ 'selected' if filters.instrument == key }}>{{ label }}</option>{% endfor %}
+        </select></div>
+      <div class="col-sm-4 mb-2">
+        <select class="form-control form-control-sm" name="level" aria-label="At least this good">
+          <option value="">Any level</option>
+          {% for key, label in levels.items() %}<option value="{{ key }}" {{ 'selected' if filters.level == key }}>At least {{ label|lower }}</option>{% endfor %}
+        </select></div>
+      <div class="col-sm-4 mb-2">
+        <select class="form-control form-control-sm" name="genre" aria-label="Likes">
+          <option value="">Any genre</option>
+          {% for key, label in genres.items() %}<option value="{{ key }}" {{ 'selected' if filters.genre == key }}>{{ label }}</option>{% endfor %}
+        </select></div>
+      <div class="col-sm-4 mb-2">
+        <select class="form-control form-control-sm" name="goal" aria-label="Looking for">
+          <option value="">Looking for anything</option>
+          {% for key, label in goals.items() %}<option value="{{ key }}" {{ 'selected' if filters.goal == key }}>{{ label }}</option>{% endfor %}
+        </select></div>
+      <div class="col-12"><button class="btn btn-outline-primary btn-sm" type="submit">Filter</button>
+        {% if filters.instrument or filters.genre or filters.goal or filters.level %}<a class="btn btn-link btn-sm" href="{{ url_for('views.index', kind=kind or None, q=q or None) }}">Clear</a>{% endif %}</div>
+    </form>
     <div class="card rc-card">
       <ul class="list-group list-group-flush">
         {% for user in users %}
-        <li class="list-group-item d-flex align-items-center">
-          {{ avatar(user['username'], user['id']) }}
-          <a class="author ml-2" href="{{ url_for('views.profile', user_id=user['id']) }}">{{ user['username'] }}</a>
-          {{ kind_badge(user['kind']) }}
-          <span class="text-muted ml-2">{{ user['name'] }}</span>
-          {% if user['location'] %}<span class="text-muted small ml-auto">{{ user['location'] }}</span>{% endif %}
+        <li class="list-group-item">
+          <div class="d-flex align-items-center">
+            {{ avatar(user['username'], user['id']) }}
+            <a class="author ml-2" href="{{ url_for('views.profile', user_id=user['id']) }}">{{ user['username'] }}</a>
+            {{ kind_badge(user['kind']) }}
+            <span class="text-muted ml-2">{{ user['name'] }}</span>
+            {% if user['location'] %}<span class="text-muted small ml-auto">{{ user['location'] }}</span>{% endif %}
+          </div>
+          {% if user['instruments'] or user['genres'] or user['goals'] %}
+          <div class="chips mt-1">{{ tag_chips(user, instruments, genres, goals) }}</div>
+          {% endif %}
         </li>
         {% else %}
-        <li class="list-group-item">No users found.</li>
+        <li class="list-group-item">{% if relation == 'following' %}You are not following anyone yet.{% elif relation == 'followers' %}Nobody follows you yet.{% else %}No users found.{% endif %}</li>
         {% endfor %}
       </ul>
     </div>

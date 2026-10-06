@@ -10,7 +10,7 @@ from rockconnect import create_app
 @pytest.fixture
 def client(tmp_path):
     """A test client on its own temporary database and photo folder (never the real instance folder)."""
-    app = create_app({"TESTING": True,
+    app = create_app({"TESTING": True, "NEW_MEMBER_HOLD_POSTS": 0, "NEW_MEMBER_HOLD_HOURS": 0, "DEFAULT_WORD_LISTS": "",
                       "INSTANCE_PATH": str(tmp_path / "instance"),
                       "DATABASE_URL": "sqlite:///" + str(tmp_path / "t.sqlite"),
                       "UPLOAD_DIR": str(tmp_path / "uploads")})
