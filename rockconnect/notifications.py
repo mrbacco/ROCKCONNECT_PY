@@ -46,6 +46,16 @@ def new_follower(follower, followed_id):
            url_for("views.profile", user_id=follower["id"]), "follow:%d" % follower["id"])
 
 
+def follow_request(follower, target_id):
+    notify(target_id, "follow_request", "%s asked to follow you." % follower["name"],
+           url_for("follows.requests_page"), "followreq:%d" % follower["id"])
+
+
+def follow_accepted(owner, requester_id):
+    notify(requester_id, "follow_accepted", "%s accepted your follow request." % owner["name"],
+           url_for("views.profile", user_id=owner["id"]), "followok:%d" % owner["id"])
+
+
 def friend_going(actor, gig):
     """Tell the followers of `actor` that they are going to `gig`. Returns how many were told."""
     if actor["hide_plans"]:

@@ -3,7 +3,7 @@
   Author: mrbacco04@gmail.com
   Date: 2026-10-05
 #}
-{% from "_macros.html" import avatar, brand with context %}
+{% from "_macros.html" import avatar, brand, icon with context %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -24,49 +24,73 @@
   {# the menu bar only exists for signed-in members; visitors see just the page (landing, sign in, sign up) #}
   {% if g.user %}
   <header>
-    <nav class="navbar navbar-expand-xl navbar-light navbar-rc sticky-top">
+    <nav class="navbar navbar-light navbar-rc sticky-top" aria-label="Main menu">
       <a class="navbar-brand brand" href="{{ url_for('feed.index') }}">{{ brand() }}</a>
-      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarCollapse"
-              aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarCollapse">
-        <ul class="navbar-nav mr-auto">
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('feed.index') }}">Feed</a></li>
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('feed.gigs') }}">Gigs</a></li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('conversations.inbox') }}">Messages
-              <span id="unread-badge" class="badge badge-danger {% if not unread_count %}d-none{% endif %}"
-                    data-url="{{ url_for('conversations.unread') }}">{{ unread_count }}</span>
-            </a>
-          </li>
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('views.index') }}">People</a></li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('notifications.index') }}" title="Notifications">Alerts
-              <span id="notification-badge" class="badge badge-danger {% if not notification_count %}d-none{% endif %}">{{ notification_count }}</span>
-            </a>
-          </li>
-          {% if g.user['role'] == 'admin' %}
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.dashboard') }}">Admin
-            {% if review_count %}<span class="badge badge-danger" id="review-badge">{{ review_count }}</span>{% endif %}</a></li>
-          {% elif g.user['role'] == 'moderator' %}
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.review_queue') }}">Moderate
-            {% if review_count %}<span class="badge badge-danger" id="review-badge">{{ review_count }}</span>{% endif %}</a></li>
-          {% endif %}
-        </ul>
-        <form class="form-inline mt-2 mt-xl-0 mr-xl-2" method="GET" action="{{ url_for('views.index') }}">
-          <input class="form-control form-control-sm nav-search mr-sm-2" type="text" name="q" placeholder="Search people"
-                 aria-label="Search" value="{{ request.args.get('q', '') }}">
-          <button class="btn btn-primary btn-sm my-2 my-sm-0" type="submit">Search</button>
+      {# the main menu is icons, always visible (also on a phone): the name is in the tooltip and for screen readers #}
+      {% set page = request.endpoint or '' %}
+      <ul class="navbar-nav flex-row nav-icons">
+        <li class="nav-item">
+          <a class="nav-icon {{ 'active' if page in ('feed.index', 'feed.single_post') }}" href="{{ url_for('feed.index') }}" title="Feed"
+             {% if page == 'feed.index' %}aria-current="page"{% endif %}>{{ icon('home') }}<span class="sr-only">Feed</span></a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-icon {{ 'active' if page in ('feed.gigs', 'social.mine', 'events.event_page') }}" href="{{ url_for('feed.gigs') }}" title="Gigs"
+             {% if page == 'feed.gigs' %}aria-current="page"{% endif %}>{{ icon('music') }}<span class="sr-only">Gigs</span></a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-icon {{ 'active' if page.startswith('conversations.') }}" href="{{ url_for('conversations.inbox') }}" title="Messages"
+             {% if page == 'conversations.inbox' %}aria-current="page"{% endif %}>{{ icon('chat') }}<span class="sr-only">Messages</span>
+            <span id="unread-badge" class="badge badge-danger {% if not unread_count %}d-none{% endif %}"
+                  data-url="{{ url_for('conversations.unread') }}">{{ unread_count }}</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-icon {{ 'active' if page == 'views.index' }}" href="{{ url_for('views.index') }}" title="People"
+             {% if page == 'views.index' %}aria-current="page"{% endif %}>{{ icon('users') }}<span class="sr-only">People</span></a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-icon {{ 'active' if page == 'notifications.index' }}" href="{{ url_for('notifications.index') }}" title="Alerts"
+             {% if page == 'notifications.index' %}aria-current="page"{% endif %}>{{ icon('bell') }}<span class="sr-only">Alerts</span>
+            <span id="notification-badge" class="badge badge-danger {% if not notification_count %}d-none{% endif %}">{{ notification_count }}</span>
+          </a>
+        </li>
+        {% if g.user['role'] == 'admin' %}
+        <li class="nav-item">
+          <a class="nav-icon {{ 'active' if page.startswith('admin.') }}" href="{{ url_for('admin.dashboard') }}" title="Admin">{{ icon('shield') }}<span class="sr-only">Admin</span>
+            {% if review_count %}<span class="badge badge-danger" id="review-badge">{{ review_count }}</span>{% endif %}</a>
+        </li>
+        {% elif g.user['role'] == 'moderator' %}
+        <li class="nav-item">
+          <a class="nav-icon {{ 'active' if page.startswith('admin.') }}" href="{{ url_for('admin.review_queue') }}" title="Moderate">{{ icon('shield') }}<span class="sr-only">Moderate</span>
+            {% if review_count %}<span class="badge badge-danger" id="review-badge">{{ review_count }}</span>{% endif %}</a>
+        </li>
+        {% endif %}
+      </ul>
+      <div class="nav-right">
+        <form class="form-inline d-none d-lg-flex nav-search-form" method="GET" action="{{ url_for('views.index') }}" role="search">
+          <input class="form-control form-control-sm nav-search" type="text" name="q" placeholder="Search people"
+                 aria-label="Search people" value="{{ request.args.get('q', '') }}">
+          <button class="nav-icon nav-icon-sm" type="submit" title="Search" aria-label="Search">{{ icon('search') }}</button>
         </form>
-        <a class="nav-link d-flex align-items-center" href="{{ url_for('views.profile', user_id=g.user['id']) }}">
-          {{ avatar(g.user['username'], g.user['id'], 'sm') }}<span class="ml-2 nav-name">{{ g.user['name'].split()[0] if g.user['kind'] == 'fan' else g.user['name'] }}</span>
-        </a>
-        <a class="nav-link" href="{{ url_for('account.settings') }}">Account</a>
-        <form class="form-inline" method="POST" action="{{ url_for('auth.signout') }}">
-          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-          <button class="btn btn-outline-dark btn-sm" type="submit">Sign out</button>
-        </form>
+        <div class="dropdown">
+          <a class="nav-avatar" href="#" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"
+             title="{{ g.user['name'] }}" aria-label="Your menu">{{ avatar(g.user['username'], g.user['id'], 'sm') }}{% if follow_request_count %}<span class="nav-dot" id="request-dot"></span>{% endif %}</a>
+          <div class="dropdown-menu dropdown-menu-right">
+            <span class="dropdown-header">{{ g.user['name'] }}</span>
+            <a class="dropdown-item" href="{{ url_for('views.profile', user_id=g.user['id']) }}">My profile</a>
+            <a class="dropdown-item" href="{{ url_for('social.mine') }}">My gigs</a>
+            {% if g.user['is_private'] or follow_request_count %}
+            <a class="dropdown-item d-flex justify-content-between align-items-center" href="{{ url_for('follows.requests_page') }}">Follow requests
+              {% if follow_request_count %}<span class="badge badge-danger ml-3">{{ follow_request_count }}</span>{% endif %}</a>
+            {% endif %}
+            <a class="dropdown-item" href="{{ url_for('account.settings') }}">Account</a>
+            <div class="dropdown-divider"></div>
+            <form method="POST" action="{{ url_for('auth.signout') }}">
+              <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+              <button class="dropdown-item" type="submit">Sign out</button>
+            </form>
+          </div>
+        </div>
       </div>
     </nav>
   </header>

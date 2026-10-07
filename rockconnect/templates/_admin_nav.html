@@ -3,7 +3,7 @@
   Author: mrbacco04@gmail.com
   Date: 2026-10-05
 #}
-<h2>{{ 'Admin' if g.user['role'] == 'admin' else 'Moderation' }}</h2>
+<h2 class="page-title">{{ 'Admin' if g.user['role'] == 'admin' else 'Moderation' }}</h2>
 <ul class="nav nav-pills kind-filter mb-3">
   {% if g.user['role'] == 'admin' %}
   <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'admin.dashboard' }}" href="{{ url_for('admin.dashboard') }}">Overview</a></li>

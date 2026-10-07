@@ -198,7 +198,7 @@ def meta():
               "contact": cfg["CONTACT_EMAIL"]},
         features={"nearby_gigs": True, "imported_events": bool(sources), "event_sources": sources,
                   "place_search": cfg["GEOCODER"] != "none", "going": True, "people_search": True,
-                  "message_requests": True, "follows": True, "notifications": True, "skill_levels": True,
+                  "message_requests": True, "follows": True, "private_accounts": True, "notifications": True, "skill_levels": True,
                   "gig_comments": True, "calendar": True, "age_check": True})
 
 

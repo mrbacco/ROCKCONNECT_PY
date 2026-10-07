@@ -83,6 +83,12 @@
         <label class="form-check-label small text-normal" for="hide_plans">Never show which gigs I am going to (you are still counted, but nobody sees your name)</label>
       </div>
       <div class="form-check mb-3">
+        <input id="is_private" class="form-check-input" type="checkbox" name="is_private" value="1" {{ 'checked' if g.user['is_private'] }}>
+        <label class="form-check-label small text-normal" for="is_private"><strong>Private account.</strong> People can still find you and see your
+          name, picture and bio, but your posts, photos, comments and plans are only for members you accept. Following you then needs your OK
+          (you will find the requests under your picture, "Follow requests"). Turning this off lets everyone who is waiting in.</label>
+      </div>
+      <div class="form-check mb-3">
         <input id="notify_friends_going" class="form-check-input" type="checkbox" name="notify_friends_going" value="1" {{ 'checked' if g.user['notify_friends_going'] }}>
         <label class="form-check-label small text-normal" for="notify_friends_going">Tell me when people I follow say they are going to a gig</label>
       </div>

@@ -41,9 +41,10 @@ def delete_account_data(user_id):
         "DELETE FROM external_events WHERE user_id = :u",
         "DELETE FROM attendances WHERE user_id = :u",
         "DELETE FROM follows WHERE follower_id = :u OR followed_id = :u",
+        "DELETE FROM follow_requests WHERE follower_id = :u OR followed_id = :u",
         "DELETE FROM notifications WHERE user_id = :u",
         # what they caused in other members' lists ("X started following you", "X is going to ..."): the keys end in their id
-        "DELETE FROM notifications WHERE dedupe_key = :follow_key OR dedupe_key LIKE :going_key",
+        "DELETE FROM notifications WHERE dedupe_key IN (:follow_key, :request_key, :accepted_key) OR dedupe_key LIKE :going_key",
         "DELETE FROM gig_comments WHERE user_id = :u",
         "DELETE FROM user_instruments WHERE user_id = :u",
         "DELETE FROM user_genres WHERE user_id = :u",
@@ -55,7 +56,8 @@ def delete_account_data(user_id):
         " resolution = 'author_deleted' WHERE target_user_id = :u",
         "DELETE FROM users WHERE id = :u",
     ):
-        execute(sql, u=user_id, follow_key="follow:%d" % user_id, going_key="going:%d:%%" % user_id)
+        execute(sql, u=user_id, follow_key="follow:%d" % user_id, request_key="followreq:%d" % user_id,
+                accepted_key="followok:%d" % user_id, going_key="going:%d:%%" % user_id)
     commit()
     for name in photos:  # after the commit: if the database step failed, no photo is lost
         try:
@@ -153,7 +155,7 @@ def build_export(user):
         "exported_at_utc": now_str(),
         "profile": {k: user[k] for k in ("username", "name", "email", "about", "kind", "location",
                                            "website", "created_at", "terms_accepted_at", "birth_date")}
-                   | {"email_confirmed": bool(user["email_verified"]), "hide_gig_plans": bool(user["hide_plans"]),
+                   | {"email_confirmed": bool(user["email_verified"]), "hide_gig_plans": bool(user["hide_plans"]), "private_account": bool(user["is_private"]),
                                                            "notify_friends_going": bool(user["notify_friends_going"])},
         "posts": [{**p, "photo": "photos/" + p["image_filename"] if p["image_filename"] else None}
                   for p in posts],
@@ -169,6 +171,10 @@ def build_export(user):
             "SELECT u.username FROM follows f JOIN users u ON u.id = f.followed_id WHERE f.follower_id = :u")],
         "followers": [r["username"] for r in rows(
             "SELECT u.username FROM follows f JOIN users u ON u.id = f.follower_id WHERE f.followed_id = :u")],
+        "follow_requests_sent": [r["username"] for r in rows(
+            "SELECT u.username FROM follow_requests f JOIN users u ON u.id = f.followed_id WHERE f.follower_id = :u")],
+        "follow_requests_received": [r["username"] for r in rows(
+            "SELECT u.username FROM follow_requests f JOIN users u ON u.id = f.follower_id WHERE f.followed_id = :u")],
         "gig_comments": rows("SELECT source, event_ref, title, event_at, body, created_at FROM gig_comments"
                              " WHERE user_id = :u ORDER BY id"),
         "gig_plans": rows("SELECT source, event_ref, status, visible, title, venue, city, event_at, created_at"

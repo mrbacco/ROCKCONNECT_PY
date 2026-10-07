@@ -7,7 +7,7 @@
 {% block title %}Blocked words - {{ site.name }}{% endblock %}
 {% block content %}
 {% include "_admin_nav.html" %}
-<p class="text-muted">A post, comment or gig comment containing one of these words or phrases is held in the
+<p class="text-muted page-intro">A post, comment or gig comment containing one of these words or phrases is held in the
   <a href="{{ url_for('admin.review_queue') }}">review queue</a> instead of being shown. It works in <strong>any language</strong>:
   write the word or phrase as people write it. Matching ignores capitals and accents, finds whole words only (so "ass" does not
   catch "class"), and sees through repeated letters ("porcaaa"), digits for letters ("p0rca") and dashes between the words of a phrase.

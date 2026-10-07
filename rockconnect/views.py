@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 import re
 
 from . import follows, importer, ratelimit, social, taxonomy
-from .auth import login_required, send_verification
+from .auth import blocked_email_domain, login_required, send_verification
 from .baclog import bac_log
 from .db import KINDS, commit, execute, rollback
 from .feed import load_posts
@@ -56,7 +56,7 @@ def index():
 @bp.route("/users_list/<int:user_id>")
 def profile(user_id):
     user = execute(
-        "SELECT id, username, name, about, kind, location, website, status, created_at"
+        "SELECT id, username, name, about, kind, location, website, status, created_at, is_private"
         " FROM users WHERE id = :id", id=user_id
     ).mappings().fetchone()
     if user is None or (user["status"] == "banned" and not is_admin()):
@@ -66,15 +66,18 @@ def profile(user_id):
     # the wall (that member's posts) is only for signed-in members
     wall, comments_by_post, has_more = ([], {}, False)
     i_blocked = blocked_me = False
-    if g.user:
+    # a private member's posts and plans are for the member and the people they accepted
+    locked = bool(g.user and user["is_private"] and g.user["id"] != user_id and not follows.is_following(g.user["id"], user_id))
+    if g.user and not locked:
         wall, comments_by_post, has_more = load_posts(
             user_id=user_id, before=request.args.get("before", type=int))
+    if g.user:
         pair = execute("SELECT blocker_id FROM blocks WHERE (blocker_id = :me AND blocked_id = :u)"
                        " OR (blocker_id = :u AND blocked_id = :me)", me=g.user["id"], u=user_id).fetchall()
         i_blocked = any(r[0] == g.user["id"] for r in pair)
         blocked_me = any(r[0] == user_id for r in pair)
     plans = []
-    if g.user and not user_hides_plans(user_id):
+    if g.user and not locked and not user_hides_plans(user_id):
         plans = social.my_plans(user_id, g.user["id"])      # only the public ones, and none from a blocked member
         if i_blocked or blocked_me:
             plans = []
@@ -83,7 +86,8 @@ def profile(user_id):
                            next_before=wall[-1]["id"] if has_more else None,
                            i_blocked=i_blocked, blocked_me=blocked_me, tags=social.user_tags(user_id), plans=plans,
                            follower_count=follows.counts(user_id)[0], following_count=follows.counts(user_id)[1],
-                           i_follow=bool(g.user) and follows.is_following(g.user["id"], user_id),
+                           i_follow=bool(g.user) and follows.is_following(g.user["id"], user_id), locked=locked,
+                           requested=bool(g.user) and follows.is_requested(g.user["id"], user_id),
                            instruments=taxonomy.INSTRUMENTS, genres=taxonomy.GENRES, goals=taxonomy.GOALS,
                            attendance=social.post_attendance(wall, g.user["id"]) if g.user else {})
 
@@ -148,8 +152,11 @@ def edit():
         goals = taxonomy.only_valid(request.form.getlist("goals"), taxonomy.GOALS)
         hide_plans = 1 if request.form.get("hide_plans") == "1" else 0
         notify_friends = 1 if request.form.get("notify_friends_going") == "1" else 0
+        is_private = 1 if request.form.get("is_private") == "1" else 0
         bit_error, bit_changes = _bandsintown_form(kind)
         error = error or bit_error
+        if not error and email != g.user["email"].lower() and blocked_email_domain(email):
+            error = "Please use a permanent email address: throw-away mailboxes cannot be used."
         if not error and email != g.user["email"].lower() and execute(
                 "SELECT 1 FROM users WHERE lower(email) = :e AND id <> :id",
                 e=email, id=g.user["id"]).fetchone():
@@ -167,17 +174,19 @@ def edit():
                 execute(
                     "UPDATE users SET name = :name, about = :about, location = :location,"
                     " website = :website, kind = :kind, hide_plans = :hide_plans,"
-                    " notify_friends_going = :notify_friends" +
+                    " notify_friends_going = :notify_friends, is_private = :is_private" +
                     (", email = :email, email_verified = 0" if change_now else "") +
                     (", bandsintown_artist = :bi_artist, bandsintown_app_id = :bi_app" if bit_changes else "") +
                     " WHERE id = :id",
                     name=name, about=about, location=location or None, website=website or None,
-                    kind=kind, email=email, id=g.user["id"], hide_plans=hide_plans, notify_friends=notify_friends,
+                    kind=kind, email=email, id=g.user["id"], hide_plans=hide_plans, notify_friends=notify_friends, is_private=is_private,
                     bi_artist=(bit_changes or {}).get("bandsintown_artist"), bi_app=(bit_changes or {}).get("bandsintown_app_id"),
                 )
                 if bit_changes and not bit_changes["bandsintown_artist"]:
                     execute("DELETE FROM external_events WHERE user_id = :u", u=g.user["id"])   # disconnected: forget its dates
                 commit()
+                if g.user["is_private"] and not is_private:
+                    follows.accept_all(g.user)          # no longer private: everyone who was waiting is let in
                 social.save_tags(g.user["id"], instruments, music_genres, goals)
             except IntegrityError:  # someone took that address a moment ago
                 rollback()

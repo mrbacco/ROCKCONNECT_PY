@@ -97,8 +97,10 @@ or whose RSVP is private are not listed (private RSVPs are still counted). Error
 
 | Endpoint | What it does |
 |---|---|
-| `POST /api/v1/people/<id>/follow`, `.../unfollow` | answer `following` (true/false) and `followers` (count) |
+| `POST /api/v1/people/<id>/follow`, `.../unfollow` | answer `following`, `requested` (true when the member is private and must accept first, `unfollow` also withdraws a request) and `followers` (count) |
 | `GET /api/v1/me/following`, `GET /api/v1/me/followers` | the people, in the same shape as `/people` |
+| `GET /api/v1/me/follow-requests` | members waiting for me to accept them (my account is private): the `/people` shape plus `asked_at` |
+| `POST /api/v1/follow-requests/<id>/accept`, `.../decline` | answer a request; `404 not_found` when there is none. Declining is silent |
 | `GET /api/v1/notifications` | `unread`, `count`, `notifications`: `id`, `kind` (`follow`, `going`), `text`, `url`, `created_at`, `read` |
 | `POST /api/v1/notifications/read` | mark all as read; answer `unread` = 0 |
 | `GET /api/v1/gigs/<source>/<ref>/comments` | the discussion: `total`, `comments` (`id`, `body`, `created_at`, `mine`, `author`) oldest first, last 100 |
@@ -107,14 +109,14 @@ or whose RSVP is private are not listed (private RSVPs are still counted). Error
 
 `/people`, `/gigs/.../attendees` and `/me/following` also take `level` (`beginner`, `intermediate`, `advanced`, `pro`, meaning
 "at least", together with `instrument`), `/people` takes `relation` = `following` or `followers`, and persons carry
-`instrument_levels` (instrument -> level or null) and `following`. Attendee lists put people you follow first, and the counts carry
+`instrument_levels` (instrument -> level or null), `following` and `private` (a private member's posts, gigs, comments and plans are hidden until they accept your request; the person is still listed). Attendee lists put people you follow first, and the counts carry
 `friends_going`. Calendar files are plain web downloads (`GET /gigs/<source>/<ref>.ics`, `GET /gigs/mine.ics`), not JSON.
 `GET /api/v1/lists` now also returns `levels`. Errors: `bad_level`, `empty`, `too_long`, `closed` (the gig is long over), `email_not_confirmed`,
 `not_found`, `forbidden`.
 
 Every API call answers `403 age_required` for a member who has not given a date of birth yet (an older account): send them to
 the website's *confirm your date of birth* page, or add that screen to the app. `/meta` lists the feature flags `follows`,
-`notifications`, `skill_levels`, `gig_comments`, `calendar` and `age_check`.
+`notifications`, `private_accounts`, `skill_levels`, `gig_comments`, `calendar` and `age_check`.
 
 State-changing calls are `POST` with the CSRF token (`_csrf`) while the API still uses the website cookie; the planned token sign-in
 for the Android app replaces that (see ANDROID.md).

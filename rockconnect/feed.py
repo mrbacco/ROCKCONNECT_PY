@@ -35,6 +35,10 @@ VISIBLE_AUTHOR = (
     " AND u.id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = :me)"
 )
 
+# content (posts, comments, photos, plans) of a PRIVATE member is only for the member and the people they accepted
+PRIVATE_OK = ("(u.is_private = 0 OR u.id = :me"
+              " OR u.id IN (SELECT followed_id FROM follows WHERE follower_id = :me))")
+
 POST_SELECT = (
     "SELECT p.id, p.body, p.image_filename, p.created_at, p.event_at, p.event_place, p.latitude, p.longitude, p.genre, p.mod_state,"
     " u.id AS author_id, u.username AS author, u.name AS author_name, u.kind AS author_kind,"
@@ -42,6 +46,7 @@ POST_SELECT = (
     " (SELECT count(*) FROM likes l WHERE l.post_id = p.id AND l.user_id = :me) AS liked_by_me"
     " FROM posts p JOIN users u ON u.id = p.user_id WHERE " + VISIBLE_AUTHOR +
     " AND (p.mod_state = 'ok' OR p.user_id = :me)"      # waiting for a moderator: only its author sees it
+    " AND " + PRIVATE_OK                                  # a private member's posts: only for people they accepted
 )
 
 
@@ -55,7 +60,7 @@ def _attach_comments(rows):
             "SELECT c.id, c.post_id, c.body, c.created_at, c.user_id, c.mod_state, u.username AS author"
             " FROM comments c JOIN users u ON u.id = c.user_id"
             " WHERE c.post_id IN (" + marks + ") AND " + VISIBLE_AUTHOR +
-            " AND (c.mod_state = 'ok' OR c.user_id = :me) ORDER BY c.id",
+            " AND (c.mod_state = 'ok' OR c.user_id = :me) AND " + PRIVATE_OK + " ORDER BY c.id",
             me=g.user["id"], **id_params
         ).mappings():
             comments_by_post[c["post_id"]].append(c)
@@ -345,6 +350,12 @@ def delete_comment(comment_id):
 @bp.route("/uploads/<filename>")
 @login_required
 def uploaded_file(filename):
+    # the photo of a private member's post is only for the people they accepted (the file name is unguessable, but a copied
+    # link must not work for everyone)
+    if execute("SELECT 1 FROM posts p JOIN users u ON u.id = p.user_id WHERE p.image_filename = :f AND u.is_private = 1"
+               " AND u.id <> :me AND u.id NOT IN (SELECT followed_id FROM follows WHERE follower_id = :me)",
+               f=filename, me=g.user["id"]).fetchone():
+        abort(404)
     response = storage.get().response(filename)
     response.cache_control.private = True  # photos are for signed-in members only
     response.cache_control.public = False

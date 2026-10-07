@@ -48,6 +48,7 @@ def create(user_id):
     execute("DELETE FROM sessions WHERE expires_at < :old", old=old)
     execute("DELETE FROM rate_hits WHERE created_at < :old", old=old)       # rate-limit counters older than a day
     execute("DELETE FROM email_tokens WHERE expires_at < :now", now=now.strftime(TIME_FORMAT))
+    execute("DELETE FROM pending_signups WHERE expires_at < :now", now=now.strftime(TIME_FORMAT))      # never confirmed: forgotten
     insert(sessions, token_hash=_hash(token), user_id=user_id,
            created_at=now.strftime(TIME_FORMAT), expires_at=expires_at)
     commit()

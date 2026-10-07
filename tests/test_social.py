@@ -105,12 +105,12 @@ def test_like_toggle_and_comment(client):
 
 def test_only_owner_can_delete_post_and_image_file_is_removed(client, tmp_path):
     bacco, rita = two_users(client)
-    post(bacco, "mine", image=(io.BytesIO(PNG), "p.png"))
+    post(bacco, "zebra-post-text", image=(io.BytesIO(PNG), "p.png"))
     assert len(list((tmp_path / "uploads").iterdir())) == 1
     assert rita.post("/posts/1/delete", data={"_csrf": csrf(rita, "/feed")}).status_code == 403
-    assert b"mine" in bacco.get("/feed").data
+    assert b"zebra-post-text" in bacco.get("/feed").data
     assert b"Post deleted" in act(bacco, "/posts/1/delete").data
-    assert b"mine" not in bacco.get("/feed").data
+    assert b"zebra-post-text" not in bacco.get("/feed").data
     assert list((tmp_path / "uploads").iterdir()) == []
 
 

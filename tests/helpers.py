@@ -44,9 +44,17 @@ def signin(client, username="bacco", password=PASSWORD, **extra):
 
 
 def register(app, username="bacco", **over):
-    """Sign up AND sign in on a new test client; returns the client."""
+    """An existing member: sign up AND sign in on a new test client; returns the client.
+
+    Even when the app requires email confirmation the account is created at once here (like a member who joined before the
+    rule), with its address still unconfirmed. The confirm-first sign-up has its own tests (test_signup_confirm.py)."""
     client = app.test_client()
-    signup(client, username, **over)
+    required = app.config["REQUIRE_EMAIL_VERIFICATION"]
+    app.config["REQUIRE_EMAIL_VERIFICATION"] = False
+    try:
+        signup(client, username, **over)
+    finally:
+        app.config["REQUIRE_EMAIL_VERIFICATION"] = required
     signin(client, username)
     return client
 

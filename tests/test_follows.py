@@ -135,9 +135,9 @@ def test_following_is_rate_limited(tmp_path):
 def test_the_api_follow_calls(scene):
     app, kings, rita, sam, dee, eve, ref = scene
     r = rita.post("/api/v1/people/%d/follow" % user_id(app, "sam"), data={"_csrf": token_of(rita, "/feed")})
-    assert r.get_json() == {"following": True, "followers": 1}
+    assert r.get_json() == {"following": True, "requested": False, "followers": 1}
     r = rita.post("/api/v1/people/%d/unfollow" % user_id(app, "sam"), data={"_csrf": token_of(rita, "/feed")})
-    assert r.get_json() == {"following": False, "followers": 0}
+    assert r.get_json() == {"following": False, "requested": False, "followers": 0}
     assert app.test_client().get("/api/v1/me/following").status_code == 401
     own = rita.post("/api/v1/people/%d/follow" % user_id(app, "rita"), data={"_csrf": token_of(rita, "/feed")})
     assert own.status_code == 403 and own.get_json()["code"] == "cannot_follow"

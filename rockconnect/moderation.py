@@ -93,6 +93,8 @@ def block(user_id):
             commit()
             execute("DELETE FROM follows WHERE (follower_id = :a AND followed_id = :b) OR (follower_id = :b AND followed_id = :a)",
                     a=me, b=user_id)
+            execute("DELETE FROM follow_requests WHERE (follower_id = :a AND followed_id = :b)"
+                    " OR (follower_id = :b AND followed_id = :a)", a=me, b=user_id)
             commit()
             bac_log("block", "user id=%s blocked id=%s" % (me, user_id))
         except IntegrityError:

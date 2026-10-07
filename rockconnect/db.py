@@ -50,6 +50,7 @@ users = Table(
     Column("bandsintown_artist", String(120)),
     Column("bandsintown_app_id", String(64)),                               # secret: never shown, logged or exported
     Column("hide_plans", Integer, nullable=False, server_default="0"),      # 1 = never show which gigs I am going to
+    Column("is_private", Integer, nullable=False, server_default="0"),      # 1 = posts and plans only for members I accepted
     Column("birth_date", String(10)),                                       # "YYYY-MM-DD", only used to check the age: never shown
     Column("notify_friends_going", Integer, nullable=False, server_default="1"),   # tell me when people I follow go to a gig
 )
@@ -92,7 +93,7 @@ posts = Table(
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("user_id", Integer, ForeignKey("users.id"), nullable=False, index=True),
     Column("body", Text, nullable=False),            # "" is allowed for photo-only posts
-    Column("image_filename", String(64)),            # random name inside the uploads folder
+    Column("image_filename", String(64), index=True),   # random name inside the uploads folder
     Column("created_at", String(19), nullable=False),
     Column("event_at", String(16), index=True),      # "YYYY-MM-DD HH:MM" when the post announces a gig
     Column("event_place", String(120)),              # where the gig is
@@ -435,4 +436,29 @@ blocked_words = Table(
     Column("word", String(80), nullable=False, unique=True),
     Column("created_by", Integer),
     Column("created_at", String(19), nullable=False),
+)
+
+# a member asked to follow a PRIVATE member and waits for the answer (accepting moves it to `follows`)
+follow_requests = Table(
+    "follow_requests", metadata,
+    Column("follower_id", Integer, ForeignKey("users.id"), primary_key=True),
+    Column("followed_id", Integer, ForeignKey("users.id"), primary_key=True, index=True),
+    Column("created_at", String(19), nullable=False),
+)
+
+# a sign-up that waits for its confirmation link: NOT an account yet (nobody can sign in with it, nobody can see it).
+# The link creates the account; unconfirmed ones are deleted after 24 hours.
+pending_signups = Table(
+    "pending_signups", metadata,
+    Column("token_hash", String(64), primary_key=True),
+    Column("username", String(30), nullable=False),
+    Column("name", String(120), nullable=False),
+    Column("email", String(254), nullable=False, index=True),
+    Column("password", String(100), nullable=False),         # already hashed (bcrypt)
+    Column("about", Text, nullable=False, server_default=""),
+    Column("kind", String(10), nullable=False),
+    Column("birth_date", String(10), nullable=False),
+    Column("terms_accepted_at", String(19), nullable=False),
+    Column("created_at", String(19), nullable=False),
+    Column("expires_at", String(19), nullable=False, index=True),
 )

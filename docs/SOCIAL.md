@@ -44,6 +44,21 @@ going" list filter by *at least* a level ("bass, advanced or better"), and the l
 * People you follow come first in the "who is going" list, and the counts show "n you follow" next to the totals.
 * Blocking someone removes the follow both ways.
 
+## Private accounts
+In *Edit profile* a member can switch on **Private account**. They stay visible on the platform (people search, "who is going" lists, the
+profile page with name, picture, bio, what they play, follower counts), but their **posts, photos, comments, gig comments, gig announcements and
+plans are only for members they accept**.
+* Following a private member becomes a **request** ("Request to follow", then "Requested", which can be pressed again to withdraw it). The owner
+  is told in *Alerts* and sees the waiting requests under their picture -> *Follow requests*, where they **accept** (the requester is told) or
+  **decline** (silent). Declined people may ask again.
+* Hidden from everyone else, everywhere: the feed, the profile wall, a post's own page, the gig board, "gigs near you", the discussion under a gig, and
+  the photo link itself (it stops working for strangers). Private RSVPs are still **counted** ("12 going") but not named. "Is going" alerts reach only
+  accepted followers (the follows table only ever holds accepted follows).
+* People who were already following keep their access when the account becomes private. Turning private **off** lets everyone who is waiting in.
+* Blocking removes follows and requests both ways. A private band or venue's gigs are hidden too, so bands that want to be found by everyone should
+  stay public.
+* The owner always sees all of their own content. Moderators work from the review queue and reports, which keep their own copy of the text.
+
 ## Talk about this gig
 Under every gig there is a discussion ("anyone driving from Dublin?", "doors are at 7"). It is one thread per concert, even if
 the gig is listed by two services. Posting needs a signed-in member (and a confirmed email where that is required): up to

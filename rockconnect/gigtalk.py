@@ -20,7 +20,7 @@ from .api import ApiError, api_login_required
 from .auth import login_required, verified_required
 from .baclog import bac_log
 from .db import commit, execute, gig_comments, insert
-from .feed import VISIBLE_AUTHOR
+from .feed import PRIVATE_OK, VISIBLE_AUTHOR
 from .util import now_str, safe_next
 
 bp = Blueprint("gigtalk", __name__)
@@ -43,7 +43,7 @@ def thread(gig, viewer):
     rows = execute(
         "SELECT a.id, a.user_id, a.body, a.created_at, a.mod_state, a.source, a.event_ref, a.title, a.event_at, a.latitude, a.longitude,"
         " u.username, u.name, u.kind FROM gig_comments a JOIN users u ON u.id = a.user_id"
-        " WHERE substr(a.event_at, 1, 10) = :day AND " + VISIBLE_AUTHOR + side + " AND" + near +
+        " WHERE substr(a.event_at, 1, 10) = :day AND " + VISIBLE_AUTHOR + " AND " + PRIVATE_OK + side + " AND" + near +
         " AND (a.mod_state = 'ok' OR a.user_id = :me) ORDER BY a.id",
         me=viewer["id"], day=gig["event_at"][:10], **near_params, **side_params).mappings().fetchall()
     mine = [r for r in rows if social._matches(r, gig)][-SHOWN:]

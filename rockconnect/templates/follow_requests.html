@@ -1,0 +1,45 @@
+{#
+  File: follow_requests.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-06
+#}
+{% extends "layout.html" %}
+{% from "_macros.html" import avatar, kind_badge %}
+{% block title %}Follow requests - {{ site.name }}{% endblock %}
+{% block content %}
+<div class="row"><div class="col-lg-6 offset-lg-3 col-md-8 offset-md-2">
+  <h2 class="page-title">Follow requests</h2>
+  {% if g.user['is_private'] %}
+  <p class="text-muted small page-intro">Your account is private: these members asked to follow you. Accepting lets them see your posts, photos,
+    comments and plans. Declining does not tell them. You can change this in <a href="{{ url_for('views.edit') }}">Edit profile</a>.</p>
+  {% else %}
+  <p class="text-muted small page-intro">Your account is public, so nobody needs to ask. Anyone still waiting from before can be accepted here. To approve
+    followers one by one, switch on <em>Private account</em> in <a href="{{ url_for('views.edit') }}">Edit profile</a>.</p>
+  {% endif %}
+  <div class="card rc-card">
+    <ul class="list-group list-group-flush">
+      {% for p in waiting %}
+      <li class="list-group-item">
+        <div class="d-flex align-items-center">
+          {{ avatar(p.username, p.id) }}
+          <div class="ml-2 flex-grow-1">
+            <a class="author" href="{{ url_for('views.profile', user_id=p.id) }}">{{ p.name }}</a> {{ kind_badge(p.kind) }}
+            <div class="small text-muted">@{{ p.username }}{% if p.location %} &middot; {{ p.location }}{% endif %} &middot; asked {{ p.asked_at|timeago }}</div>
+          </div>
+          <form class="mr-1" method="POST" action="{{ url_for('follows.accept_page', user_id=p.id) }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <button class="btn btn-primary btn-sm" type="submit">Accept</button>
+          </form>
+          <form method="POST" action="{{ url_for('follows.decline_page', user_id=p.id) }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <button class="btn btn-outline-dark btn-sm" type="submit">Decline</button>
+          </form>
+        </div>
+      </li>
+      {% else %}
+      <li class="list-group-item text-muted">Nobody is waiting.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div></div>
+{% endblock %}

@@ -25,7 +25,7 @@ from .api import ApiError, api_login_required
 from .auth import login_required
 from .baclog import bac_log
 from .db import attendances, commit, execute, insert
-from .feed import POST_SELECT, VISIBLE_AUTHOR
+from .feed import POST_SELECT, PRIVATE_OK, VISIBLE_AUTHOR
 from .util import event_label, event_time, now_str, safe_next
 
 bp = Blueprint("social", __name__)
@@ -255,14 +255,14 @@ def person(row, tags, status=None):
     return {"id": row["id"], "username": row["username"], "name": row["name"], "kind": row["kind"],
             "location": row["location"], "instruments": tags["instruments"],
             "instrument_levels": tags["instrument_levels"], "genres": tags["genres"], "goals": tags["goals"],
-            "status": status, "following": False}
+            "status": status, "following": False, "private": bool(row.get("is_private"))}
 
 
 def search_people(viewer, filters=None, q="", kind="", include_suspended=False, limit=PEOPLE_LIMIT, offset=0,
                   relation=""):
     """Members matching the filters. Blocked members (either way) are left out.
     `relation` = "following" (members I follow) or "followers" (members who follow me)."""
-    sql = ("SELECT u.id, u.username, u.name, u.kind, u.location, u.status FROM users u WHERE 1 = 1"
+    sql = ("SELECT u.id, u.username, u.name, u.kind, u.location, u.status, u.is_private FROM users u WHERE 1 = 1"
            " AND u.id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = :me)"
            " AND u.id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = :me)")
     params = {"me": viewer["id"], "lim": limit, "off": offset}
@@ -294,9 +294,9 @@ def attendees(gig, viewer_id, filters=None, status=None, limit=PEOPLE_LIMIT):
     extra, extra_params = _filter_sql(filters)
     side, side_params = ages.side_clause(_viewer_row(viewer_id))
     sql = ("SELECT a.status AS rsvp, a.source, a.event_ref, a.title, a.event_at, a.latitude, a.longitude,"
-           " u.id, u.username, u.name, u.kind, u.location FROM attendances a JOIN users u ON u.id = a.user_id"
+           " u.id, u.username, u.name, u.kind, u.location, u.is_private FROM attendances a JOIN users u ON u.id = a.user_id"
            " WHERE substr(a.event_at, 1, 10) = :day AND a.visible = 1 AND u.hide_plans = 0 AND u.id <> :me"
-           " AND " + VISIBLE_AUTHOR + side + " AND" + near)
+           " AND " + VISIBLE_AUTHOR + " AND " + PRIVATE_OK + side + " AND" + near)
     params = {"me": viewer_id, "day": gig["event_at"][:10], **near_params, **extra_params, **side_params}
     if status in STATUSES:
         sql += " AND a.status = :status"
@@ -322,6 +322,8 @@ def my_plans(user_id, viewer_id=None):
     params = {"u": user_id, "since": (datetime.now(timezone.utc) - timedelta(hours=GRACE_HOURS)).strftime("%Y-%m-%d %H:%M")}
     if viewer_id is not None and viewer_id != user_id:
         sql += " AND a.visible = 1 AND u.hide_plans = 0"
+        sql += " AND (u.is_private = 0 OR :v IN (SELECT follower_id FROM follows WHERE followed_id = u.id))"
+        params["v"] = viewer_id
     plans = []
     for row in execute(sql + " ORDER BY a.event_at", **params).mappings():
         item = dict(row, label=event_time(row["event_at"]), url=None)

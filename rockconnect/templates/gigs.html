@@ -8,8 +8,8 @@
 {% block content %}
 <div class="row">
   <div class="col-lg-6 offset-lg-3 col-md-8 offset-md-2">
-    <h2>Upcoming gigs</h2>
-    <p><a class="btn btn-ghost btn-sm" href="{{ url_for('social.mine') }}">My gigs</a></p>
+    <h2 class="page-title">Upcoming gigs</h2>
+    <p class="page-intro"><a class="btn btn-ghost btn-sm" href="{{ url_for('social.mine') }}">My gigs</a></p>
 
     {# "gigs near me": gigs.js asks the browser for the position and calls /api/v1/gigs/nearby #}
     <div class="card rc-card nearby" id="nearby" data-url="{{ url_for('api.nearby_gigs') }}"
@@ -41,7 +41,7 @@
     {% if g.user['kind'] in ('band', 'venue') %}
     <p class="text-muted">Got a gig? Use <em>Announce a gig</em> in the post box on your <a href="{{ url_for('feed.index') }}">feed</a>.</p>
     {% else %}
-    <p class="text-muted">All gigs announced by the bands and venues of the community, soonest first.</p>
+    <p class="text-muted page-intro">All gigs announced by the bands and venues of the community, soonest first.</p>
     {% endif %}
 
     {% for p in posts %}

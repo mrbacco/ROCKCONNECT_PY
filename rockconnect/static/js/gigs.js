@@ -81,7 +81,7 @@
 
     function paint() {
       going.className = "btn btn-sm mr-1 " + (gig.my_status === "going" ? "btn-primary" : "btn-outline-primary");
-      interested.className = "btn btn-sm mr-2 " + (gig.my_status === "interested" ? "btn-primary" : "btn-outline-light");
+      interested.className = "btn btn-sm mr-2 " + (gig.my_status === "interested" ? "btn-primary" : "btn-outline-dark");
       counts.textContent = gig.going_count + " going · " + gig.interested_count + " interested"
         + (gig.friends_going ? " · " + gig.friends_going + " you follow" : "");
     }

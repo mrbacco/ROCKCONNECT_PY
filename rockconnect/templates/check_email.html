@@ -1,0 +1,33 @@
+{#
+  File: check_email.html
+  Author: mrbacco04@gmail.com
+  Date: 2026-10-06
+#}
+{# Shown after sign-up: the account does not exist yet, it is created when the mailed link is opened. #}
+{% extends "layout.html" %}
+{% from "_macros.html" import brand with context %}
+{% block title %}Check your email - {{ site.name }}{% endblock %}
+{% block body_class %}bkimg{% endblock %}
+{% block container_class %}container landing{% endblock %}
+{% block content %}
+<div class="landing-card card rc-card">
+  <div class="card-body p-4 text-center">
+    <h1 class="landing-title"><a class="brand" href="{{ url_for('views.home') }}">{{ brand() }}</a></h1>
+    <div class="h1 mb-2" aria-hidden="true">&#9993;</div>
+    <h2 class="h4 mb-3">Check your email</h2>
+    {% if came_from_signin %}
+    <p class="text-muted">Your account is not created yet: we are waiting for you to confirm your email address.</p>
+    {% endif %}
+    <p>We sent a link to <strong>{{ masked }}</strong>. Open it to confirm that the address is yours: <strong>your account is created
+      when you do</strong>. The link works once and expires in 24 hours.</p>
+    <p class="small text-muted">Nothing arrived? Look in your spam folder, or ask for a new link below.</p>
+    <form method="POST" action="{{ url_for('auth.resend_signup_link') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="email" value="{{ email }}">
+      <button class="btn btn-outline-primary btn-block" type="submit">Send the link again</button>
+    </form>
+    <p class="small mt-3 mb-0"><a href="{{ url_for('auth.signup') }}">Wrong address? Start again</a></p>
+  </div>
+</div>
+{% endblock %}
+{% block footer %}{% include "_legal_links.html" %}{% endblock %}

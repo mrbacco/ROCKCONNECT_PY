@@ -10,7 +10,7 @@
 {% block content %}
 <div class="row">
   <div class="col-lg-6 offset-lg-3 col-md-8 offset-md-2">
-    <h2>People{% if q %} matching "{{ q }}"{% endif %}</h2>
+    <h2 class="page-title">People{% if q %} matching "{{ q }}"{% endif %}</h2>
     <ul class="nav nav-pills kind-filter mb-3">
       <li class="nav-item"><a class="nav-link {{ 'active' if not kind }}" href="{{ url_for('views.index', q=q or None) }}">All</a></li>
       {% for k, label in (('band', 'Bands'), ('venue', 'Venues'), ('fan', 'Fans')) %}

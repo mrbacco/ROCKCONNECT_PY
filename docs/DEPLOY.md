@@ -50,7 +50,7 @@ disks are usually temporary.
 | HTTPS | terminate it at the proxy; set `TRUST_PROXY=1` so rate limiting sees real client addresses |
 | `SESSION_MINUTES` | members stay signed in this long after their last visit (default 43200 = 30 days) |
 | `CONTACT_EMAIL` | a REAL address: also sent to OpenStreetMap to identify your site (placeholders are refused) |
-| `SMTP_*` | without it, no real e-mail is sent: nobody can confirm an address or reset a password |
+| `SMTP_*` | without it, no real e-mail is sent: nobody can confirm an address or reset a password. See "Email confirmation" below |
 | `OPERATOR_NAME`, `OPERATOR_ADDRESS`, `CONTACT_EMAIL` | printed in the terms and privacy policy |
 | Legal review | the legal pages are a starting point: have them reviewed for your country before launch |
 | Backups | database + photos (or the bucket); test a restore once |
@@ -90,3 +90,28 @@ background picture on the landing page is `rockconnect/static/images/rockconnect
 * Chat uses short polling (every 2 s while a chat is open). That is fine for hundreds of simultaneous members; for
   thousands, move chat to WebSockets/SSE.
 * SQLite is fine for a small community on one server. Use PostgreSQL for anything you sell as a service.
+
+## Email confirmation: nobody gets an account without a valid address
+With `REQUIRE_EMAIL_VERIFICATION=1` (on by itself as soon as `SMTP_HOST` is set) **signing up does not create an account**. The form is
+checked, the password is hashed, and a link is mailed to the address. The account is created only when that link is opened (a button
+on the page, so mail scanners that pre-open links cannot use it up). The link works once and expires after 24 hours; an unconfirmed
+sign-up is then deleted. Until then nobody can sign in with it, nobody can see it, and the username is not reserved (the first
+person to confirm gets it).
+* Throw-away mailbox services (mailinator, guerrillamail, yopmail...) are refused at sign-up and when changing an address. Add more
+  with `BLOCKED_EMAIL_DOMAINS=bad.example,worse.example`.
+* "Send the link again" is rate-limited per address, and answers the same whether or not an address is waiting.
+* Members who joined before this was switched on keep working; their unconfirmed address only blocks posting, commenting and messaging.
+
+Set it up (put these in `.env`, then restart):
+```
+SMTP_HOST=smtp.your-provider.com
+SMTP_PORT=587
+SMTP_USER=your-login
+SMTP_PASSWORD=your-password-or-app-password
+SMTP_FROM=noreply@your-domain.com        # an address on a domain you control
+SMTP_SECURITY=starttls                   # or ssl (port 465)
+```
+Any SMTP service works: Brevo, Mailgun, Amazon SES, Postmark, or Gmail with an app password (fine for a pilot, limited volume). For
+mail to reach inboxes and not spam folders, add **SPF, DKIM and DMARC** records for the sending domain (your provider shows them).
+To try the flow in development without a mail server, set `REQUIRE_EMAIL_VERIFICATION=1` and leave `SMTP_HOST` empty: the link is
+printed in the terminal where the app runs.

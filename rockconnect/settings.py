@@ -35,6 +35,7 @@ DEFAULT_RATE_LIMITS = {
     "follow_user":   (60, 3600),   # follow / unfollow clicks per member
     "gigtalk_user":  (30, 3600),   # comments under gigs per member
     "people_user":   (120, 600),   # people searches and attendee lists per member
+    "pending_resend": (5, 3600),   # "send the confirmation link again" for a sign-up that is not confirmed yet, per address
     "chat_request_user": (15, 86400),  # new conversations (message requests) started per member and day
 }
 
@@ -111,7 +112,10 @@ def build():
         "SMTP_SECURITY": env("SMTP_SECURITY", "starttls").lower(),  # starttls | ssl | none
         # "smtp" sends real mail, "console" prints it in the terminal (development), "memory" is for tests
         "MAIL_BACKEND": env("MAIL_BACKEND", "smtp" if smtp_host else "console"),
-        # block posting/commenting/messaging until the e-mail address is confirmed (on when mail is configured)
+        # extra throw-away mail domains to refuse at sign-up, besides the built-in list (comma separated)
+        "BLOCKED_EMAIL_DOMAINS": env("BLOCKED_EMAIL_DOMAINS", ""),
+        # a new account only exists once the link mailed to its address is opened, and unconfirmed older members cannot
+        # post, comment or message (on when mail is configured; set it to 1 in development to see the link in the terminal)
         "REQUIRE_EMAIL_VERIFICATION": env_bool("REQUIRE_EMAIL_VERIFICATION", bool(smtp_host)),
 
         # ---- photo storage: local folder (default) or any S3-compatible bucket ----

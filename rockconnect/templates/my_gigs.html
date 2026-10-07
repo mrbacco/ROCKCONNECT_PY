@@ -8,8 +8,8 @@
 {% block content %}
 <div class="row">
   <div class="col-lg-6 offset-lg-3 col-md-8 offset-md-2">
-    <h2>My gigs</h2>
-    <p class="text-muted">The gigs you are going to or interested in. Other members see the ones you left public.
+    <h2 class="page-title">My gigs</h2>
+    <p class="text-muted page-intro">The gigs you are going to or interested in. Other members see the ones you left public.
       {% if plans %}<a class="btn btn-outline-primary btn-sm ml-2" href="{{ url_for('ical.mine_file') }}">&#128197; Add all to my calendar (.ics)</a>{% endif %}</p>
     <div class="card rc-card">
       <ul class="list-group list-group-flush">

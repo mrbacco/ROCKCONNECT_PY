@@ -16,4 +16,6 @@ third parties and can use a strict Content-Security-Policy. They are unmodified 
 
 | ../../wordlists_data/*.txt | List of Dirty, Naughty, Obscene, and Otherwise Bad Words (LDNOOBW), https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words | CC BY 4.0 (LICENSE.txt in that folder); used as supplied, with very short and everyday-word entries skipped when loaded |
 
+| (inline SVG paths in templates/_macros.html) | Feather icons, https://feathericons.com | MIT |
+
 fonts.css is written for this project (it only points at the font files).

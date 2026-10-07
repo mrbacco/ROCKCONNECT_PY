@@ -32,10 +32,12 @@ name, tagline and colour are set from the environment, so one codebase serves ma
   private; strangers reach you through message requests ([docs/SOCIAL.md](docs/SOCIAL.md)).
 * **Follows, notifications, gig talk, calendar:** follow members, get a bell notice when someone you follow is going to a gig,
   chat under every gig, add gigs to Google/Apple/Outlook calendar (.ics), and tag instruments with a skill level.
+* **Private accounts:** a member can stay findable but share posts, photos, comments and plans only with people they accept (follow requests).
 * **Age check:** sign-up asks for a date of birth (never shown), minimum age 18 (`MIN_AGE`); older accounts are asked once.
 * **Private chat:** live 1-to-1 conversations with an unread badge. Nobody can write to a stranger: "Message" sends a request with
   no text, and nothing can be sent by either side until the other person accepts.
-* **Accounts you can trust:** bcrypt passwords with a strength policy, e-mail confirmation, forgotten-password reset,
+* **Accounts you can trust:** bcrypt passwords with a strength policy, **confirm-first sign-up** (no account exists until the link mailed to
+  the address is opened; throw-away mailboxes refused), forgotten-password reset,
   stay-signed-in sessions like the big social sites (30 days since your last visit, renewed on every visit, no
   countdown, "sign out on all devices"), terms/age consent recorded at sign-up.
 * **Moderation:** report posts, comments, gig comments and profiles; block people; admin console with a report queue, suspend /
@@ -44,7 +46,8 @@ name, tagline and colour are set from the environment, so one codebase serves ma
   Italian, Spanish, French, German, Portuguese and Russian, broader opt-in lists for 17 more languages), that come from a brand-new
   account (first posts, links and photos), or that three established members reported. A **moderator** role can work the queues without
   being able to suspend or erase anyone ([docs/MODERATION.md](docs/MODERATION.md)).
-* **Look:** light, minimal design (white cards on a pale yellow page, one accent colour, Inter Light type), responsive, white-label.
+* **Look:** light, minimal design (white cards on a pale yellow page, one accent colour, Inter Light type), an always-visible icon menu centred in
+  the top bar (Feed, Gigs, Messages, People, Alerts; Admin or Moderate for staff), centred page titles, responsive, white-label.
 * **Abuse protection:** database-backed rate limits on sign-in, sign-up, reset mails, posting, commenting, chat, reports, exports.
 * **Privacy:** members download all their data (zip) or delete their account; terms, privacy and cookie pages are
   filled in from your company details; no third-party requests at all (fonts, Bootstrap and jQuery are bundled).
@@ -100,7 +103,7 @@ run.py, wsgi.py          dev server / production entry point
 rockconnect/
   __init__.py            app factory, CSRF, security headers + CSP, error pages
   settings.py            all configuration from the environment
-  auth.py                sign up / in / out, e-mail confirmation, password reset, password rules
+  auth.py                sign up (confirm-first) / in / out, e-mail confirmation, password reset, password rules
   views.py, feed.py      home, directory, profiles | posts, gigs, likes, comments
   conversations.py       private chat
   moderation.py, admin.py, modlog.py     reports, blocks | admin console (admins and moderators) | audit log

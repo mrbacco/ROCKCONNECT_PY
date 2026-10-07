@@ -11,10 +11,10 @@
 <div class="row">
   <div class="col-lg-6 offset-lg-3 col-md-8 offset-md-2">
     <div class="card rc-card">
-      <div class="card-body d-flex align-items-center">
+      <div class="card-body d-flex align-items-center flex-wrap profile-head">
         {{ avatar(user['username'], user['id'], 'lg') }}
-        <div class="ml-3 flex-grow-1">
-          <h2 class="mb-0">{{ user['name'] }} {{ kind_badge(user['kind']) }}</h2>
+        <div class="ml-3 flex-grow-1 profile-info">
+          <h2 class="mb-0 h3">{{ user['name'] }} {{ kind_badge(user['kind']) }}{% if user['is_private'] %} <span class="kind-badge" title="Only people they accept see their posts">&#128274; private</span>{% endif %}</h2>
           <div class="text-muted">@{{ user['username'] }}{% if user['location'] %} &middot; {{ user['location'] }}{% endif %}</div>
           {% if g.user %}
           <div class="small text-muted">
@@ -28,9 +28,11 @@
         </div>
         {% if g.user and g.user['id'] != user['id'] %}
           {% if not i_blocked and not blocked_me %}
-          <form class="mr-2" method="POST" action="{{ url_for('follows.unfollow_page' if i_follow else 'follows.follow_page', user_id=user['id']) }}">
+          <form class="mr-2" method="POST" action="{{ url_for('follows.unfollow_page' if (i_follow or requested) else 'follows.follow_page', user_id=user['id']) }}">
             <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-            <button class="btn {{ 'btn-outline-dark' if i_follow else 'btn-outline-primary' }}" type="submit">{{ 'Following' if i_follow else 'Follow' }}</button>
+            <button class="btn {{ 'btn-outline-dark' if (i_follow or requested) else 'btn-outline-primary' }}" type="submit"
+                    {% if requested %}title="Press to cancel your request"{% endif %}>
+              {{ 'Following' if i_follow else ('Requested' if requested else ('Request to follow' if user['is_private'] else 'Follow')) }}</button>
           </form>
           <form method="POST" action="{{ url_for('conversations.start', user_id=user['id']) }}">
             <input type="hidden" name="_csrf" value="{{ csrf_token }}">
@@ -84,11 +86,21 @@
     {% endif %}
     {% if g.user %}
       {% if g.user['id'] == user['id'] %}<a class="btn btn-ghost btn-sm mb-2" href="{{ url_for('social.mine') }}">My gigs</a>{% include "_composer.html" %}{% endif %}
+      {% if locked %}
+        <div class="card rc-card"><div class="card-body text-center text-muted">
+          <div class="h4 mb-1" aria-hidden="true">&#128274;</div>
+          <strong class="text-body">This account is private.</strong><br>
+          {% if requested %}Your request is waiting for {{ user['name'] }} to accept it.
+          {% elif i_blocked or blocked_me %}
+          {% else %}{{ user['name'] }} shares posts, photos and plans only with people they accept. Send a follow request to see them.{% endif %}
+        </div></div>
+      {% else %}
       {% for p in posts %}
         {% include "_post.html" %}
       {% else %}
         <div class="card rc-card"><div class="card-body text-center text-muted">No posts yet.</div></div>
       {% endfor %}
+      {% endif %}
       {% if has_more %}
       <a class="btn btn-ghost btn-block mb-3"
          href="{{ url_for('views.profile', user_id=user['id'], before=next_before) }}">Older posts</a>
