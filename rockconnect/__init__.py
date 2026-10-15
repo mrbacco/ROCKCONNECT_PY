@@ -91,6 +91,9 @@ def create_app(test_config=None):
     if app.config["SECRET_KEY"] == settings.DEFAULT_SECRET:
         # warn loudly: the default key must not be used outside local development
         bac_log("app", "WARNING: using the default SECRET_KEY, set SECRET_KEY in the environment")
+    if app.config["MAIL_BACKEND"] == "smtp" and not app.config["SITE_URL"]:
+        # links in mails would be built from the Host header a request claims (password-reset link poisoning)
+        bac_log("app", "WARNING: real mail is on but SITE_URL is not set, set it to the public address of the site")
     if app.config["TRUST_PROXY"]:
         # one proxy in front (nginx, Caddy, a PaaS router): believe its X-Forwarded-* headers
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)

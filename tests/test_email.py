@@ -2,6 +2,8 @@
 # Author: mrbacco04@gmail.com
 # Date: 2026-10-05
 """E-mail confirmation, changing an address, forgotten password, password rules and the mail backends."""
+import smtplib
+
 import pytest
 
 from helpers import (PASSWORD, limits, link_in, make_app, outbox, post_form, register,
@@ -271,3 +273,116 @@ def test_a_broken_mail_server_never_breaks_the_page(tmp_path, monkeypatch):
     monkeypatch.setattr("rockconnect.mail.threading.Thread", Immediate)
     app = make_app(tmp_path, MAIL_BACKEND="smtp", SMTP_HOST="down.example.com")
     assert b"account is ready" in signup(app.test_client()).data
+
+
+# ------------------------------------------------------------------ real mail: headers, failures, operator checks
+class RecordingSMTP:
+    """A mail server that keeps what it was sent; `refuse` makes the login fail like a wrong password does."""
+    refuse = False
+    sent = []
+
+    def __init__(self, host, port, timeout=None):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def close(self):
+        pass
+
+    def starttls(self):
+        pass
+
+    def noop(self):
+        pass
+
+    def login(self, user, password):
+        if self.refuse:
+            raise smtplib.SMTPAuthenticationError(535, b"5.7.8 Username and Password not accepted")
+
+    def send_message(self, message):
+        RecordingSMTP.sent.append(message)
+
+
+REAL_MAIL = {"MAIL_BACKEND": "smtp", "SMTP_HOST": "mail.example.com", "SMTP_PORT": 587, "SMTP_USER": "robot",
+             "SMTP_PASSWORD": "secret-pw", "SMTP_FROM": "GigHub <noreply@gighub.com>", "SITE_URL": "https://gighub.com"}
+
+
+@pytest.fixture
+def smtp(monkeypatch):
+    RecordingSMTP.sent, RecordingSMTP.refuse = [], False
+    monkeypatch.setattr("rockconnect.mail.smtplib.SMTP", RecordingSMTP)
+    return RecordingSMTP
+
+
+def test_real_mail_has_date_and_message_id_on_the_sending_domain(tmp_path, smtp):
+    app = make_app(tmp_path, **REAL_MAIL)
+    out = app.test_cli_runner().invoke(args=["send-test-mail", "me@gmail.com"])
+    assert out.exit_code == 0 and "Accepted by mail.example.com" in out.output
+    (message,) = smtp.sent
+    assert message["To"] == "me@gmail.com" and message["Date"]
+    assert message["Message-ID"].endswith("@gighub.com>")
+
+
+def test_send_test_mail_shows_the_servers_answer(tmp_path, smtp):
+    smtp.refuse = True
+    app = make_app(tmp_path, **REAL_MAIL)
+    out = app.test_cli_runner().invoke(args=["send-test-mail", "me@gmail.com"])
+    assert out.exit_code != 0 and "535" in out.output and "Password not accepted" in out.output
+    assert "secret-pw" not in out.output and not smtp.sent
+
+
+def test_send_test_mail_explains_when_mail_is_off(tmp_path):
+    app = make_app(tmp_path, MAIL_BACKEND="console")
+    out = app.test_cli_runner().invoke(args=["send-test-mail", "me@gmail.com"])
+    assert out.exit_code != 0 and "SMTP_HOST" in out.output
+
+
+def test_a_failed_delivery_logs_the_reason_but_not_the_member(tmp_path, smtp, monkeypatch, capsys):
+    import rockconnect.baclog as baclog
+    monkeypatch.setattr(baclog, "ENABLED", True)
+    monkeypatch.setattr("rockconnect.mail.threading.Thread", Immediate)
+    smtp.refuse = True
+    app = make_app(tmp_path, **REAL_MAIL)
+    signup(app.test_client())
+    out = capsys.readouterr().out
+    assert "SMTP delivery FAILED (SMTPAuthenticationError: 535 5.7.8 Username and Password not accepted)" in out
+    assert "secret-pw" not in out
+
+
+class Immediate:  # run the "background" thread right away
+    def __init__(self, target, args, daemon):
+        self.target, self.args = target, args
+
+    def start(self):
+        self.target(*self.args)
+
+
+def test_doctor_reports_mail(tmp_path):
+    out = make_app(tmp_path, MAIL_BACKEND="console").test_cli_runner().invoke(args=["doctor"]).output
+    assert "NOT SENT: printed in the terminal" in out
+
+
+def test_doctor_flags_real_mail_without_site_url_or_with_a_placeholder_sender(tmp_path):
+    app = make_app(tmp_path, **{**REAL_MAIL, "SITE_URL": "", "SMTP_FROM": "noreply@example.com"})
+    out = app.test_cli_runner().invoke(args=["doctor"]).output
+    assert "[!] SITE_URL NOT SET" in out and "[!] SMTP_FROM (noreply@example.com) is not on a real domain" in out
+    assert "Sending e-mail for real" in out
+
+
+def test_doctor_online_logs_in_and_looks_up_spf_and_dmarc(tmp_path, smtp, monkeypatch):
+    records = {"gighub.com": ["v=spf1 include:spf.brevo.com ~all", "google-site-verification=abc"], "_dmarc.gighub.com": []}
+    monkeypatch.setattr("rockconnect.mail._txt_records", lambda name: records[name])
+    app = make_app(tmp_path, **REAL_MAIL)
+    out = app.test_cli_runner().invoke(args=["doctor", "--online"]).output
+    assert "logged in to mail.example.com:587" in out
+    assert "v=spf1 include:spf.brevo.com ~all" in out and "[!] NONE on _dmarc.gighub.com" in out
+    records["gighub.com"].append("v=spf1 include:mailgun.org ~all")          # two SPF records break both
+    out = app.test_cli_runner().invoke(args=["doctor", "--online"]).output
+    assert "[!] 2 SPF records" in out
+    smtp.refuse = True
+    out = app.test_cli_runner().invoke(args=["doctor", "--online"]).output
+    assert "[!] cannot use mail.example.com:587 (SMTPAuthenticationError: 535" in out

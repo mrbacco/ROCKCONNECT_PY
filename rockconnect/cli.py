@@ -1,7 +1,7 @@
 # File: cli.py
 # Author: mrbacco04@gmail.com
 # Date: 2026-10-05
-"""Command-line tools for the operator:  flask make-admin <username>,  flask seed-demo."""
+"""Command-line tools for the operator:  flask make-admin <username>,  flask seed-demo,  flask doctor,  flask send-test-mail."""
 import click
 from flask.cli import with_appcontext
 
@@ -162,6 +162,41 @@ def setup_report(online=False):
                 rows.append(("Place check", str(exc), True))
     if gigs + imported == 0 and not on_demand:
         rows.append(("Result", "there are NO gigs to find yet, so every 'near me' search is empty", True))
+    return rows + mail_report(online)
+
+
+MAIL_LABELS = ("Mail", "Mail sender", "Site address", "Email confirm", "Mail check", "SPF record", "DMARC record")
+
+
+def mail_report(online=False):
+    """Rows about sending e-mail (confirmation and password-reset links)."""
+    from flask import current_app
+    from . import mail
+    cfg = current_app.config
+    backend = cfg["MAIL_BACKEND"]
+    rows = [("Email confirm", "on: an account exists only once its mailed link is opened"
+             if cfg["REQUIRE_EMAIL_VERIFICATION"] else "off: accounts work without a confirmed address", False)]
+    if backend == "memory":
+        return [("Mail", "kept in memory (tests)", False)] + rows
+    if backend == "console":
+        return [("Mail", "NOT SENT: printed in the terminal (set SMTP_HOST in .env to send real mail)", False)] + rows
+    rows.insert(0, ("Mail", "SMTP via %s:%s (%s)" % (cfg["SMTP_HOST"], cfg["SMTP_PORT"], cfg["SMTP_SECURITY"]), False))
+    domain = mail.sender_domain(cfg)
+    if not domain or domain == "localhost" or domain.startswith("example.") or domain.endswith(".example") or             domain.endswith(".invalid"):
+        rows.append(("Mail sender", "SMTP_FROM (%s) is not on a real domain: set an address on your own domain"
+                     % cfg["SMTP_FROM"], True))
+    else:
+        rows.append(("Mail sender", cfg["SMTP_FROM"], False))
+    if cfg["SITE_URL"]:
+        rows.append(("Site address", cfg["SITE_URL"], False))
+    else:
+        rows.append(("Site address", "SITE_URL NOT SET: links in mails would use whatever host name the request "
+                     "claims, so a forged request could mail someone a reset link to another site", True))
+    if online:
+        ok, text = mail.check_login(cfg)
+        rows.append(("Mail check", text, not ok))
+        if domain:
+            rows += mail.check_dns(domain)
     return rows
 
 
@@ -174,13 +209,40 @@ def doctor(online):
     for label, text, problem in rows:
         click.echo("%-18s %s%s" % (label, "[!] " if problem else "", text))
     click.echo("")
-    if any(problem for _, _, problem in rows):
+    problems = [label for label, _, problem in rows if problem]
+    if any(label not in MAIL_LABELS for label in problems):
         click.echo("Next steps: see docs/EVENT-IMPORT.md. In short: put TICKETMASTER_API_KEY in the .env file "
                    "(free, worldwide), restart, and search for gigs in any city.")
-    else:
+    if any(label in MAIL_LABELS for label in problems):
+        click.echo("Mail: see 'Sending e-mail for real' in docs/DEPLOY.md, then try it with: flask send-test-mail you@your-domain")
+    if not problems:
         click.echo("Everything needed is in place.")
 
 
+@click.command("send-test-mail")
+@click.argument("address")
+@with_appcontext
+def send_test_mail(address):
+    """Send one test e-mail now and show what the mail server answered."""
+    from flask import current_app
+    from . import mail
+    cfg = current_app.config
+    if cfg["MAIL_BACKEND"] != "smtp":
+        raise click.ClickException("Mail is not being sent (MAIL_BACKEND=%s). Set SMTP_HOST and the other SMTP_ "
+                                   "settings in .env first (see docs/DEPLOY.md)." % cfg["MAIL_BACKEND"])
+    message = mail.build(cfg, address, "Test mail from %s" % cfg["SITE_NAME"],
+                         "This is a test from %s.\n\nIf it reached your inbox (not the spam folder), sign-up "
+                         "confirmations and password resets will too.\n" % (cfg["SITE_URL"] or cfg["SITE_NAME"]))
+    try:
+        mail.deliver(cfg, message)
+    except Exception as exc:
+        raise click.ClickException("Not sent: %s" % mail.describe_failure(exc))
+    bac_log("cli", "test mail accepted by %s" % cfg["SMTP_HOST"])
+    click.echo("Accepted by %s. Check the inbox of %s, and the spam folder; if it is there, look at the SPF / DKIM / "
+               "DMARC records (flask doctor --online)." % (cfg["SMTP_HOST"], address))
+
+
 def init_app(app):
-    for command in (make_admin, remove_admin, make_moderator, remove_moderator, seed_demo, import_events, prune_events, doctor):
+    for command in (make_admin, remove_admin, make_moderator, remove_moderator, seed_demo, import_events, prune_events, doctor,
+                    send_test_mail):
         app.cli.add_command(command)

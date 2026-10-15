@@ -50,7 +50,8 @@ disks are usually temporary.
 | HTTPS | terminate it at the proxy; set `TRUST_PROXY=1` so rate limiting sees real client addresses |
 | `SESSION_MINUTES` | members stay signed in this long after their last visit (default 43200 = 30 days) |
 | `CONTACT_EMAIL` | a REAL address: also sent to OpenStreetMap to identify your site (placeholders are refused) |
-| `SMTP_*` | without it, no real e-mail is sent: nobody can confirm an address or reset a password. See "Email confirmation" below |
+| `SITE_URL` | the public address (`https://your.domain`): links in mails point here. Required with real mail |
+| `SMTP_*` | without it, no real e-mail is sent: nobody can confirm an address or reset a password. See "Sending e-mail for real" below |
 | `OPERATOR_NAME`, `OPERATOR_ADDRESS`, `CONTACT_EMAIL` | printed in the terms and privacy policy |
 | Legal review | the legal pages are a starting point: have them reviewed for your country before launch |
 | Backups | database + photos (or the bucket); test a restore once |
@@ -102,16 +103,45 @@ person to confirm gets it).
 * "Send the link again" is rate-limited per address, and answers the same whether or not an address is waiting.
 * Members who joined before this was switched on keep working; their unconfirmed address only blocks posting, commenting and messaging.
 
-Set it up (put these in `.env`, then restart):
+## Sending e-mail for real
+Without `SMTP_HOST` nothing is sent (mails are printed in the terminal), so nobody can confirm an address or reset a password.
+
+**1. Pick a provider.** Any SMTP service works. For a pilot, choose one with a free tier and a dashboard that shows the DNS records:
+Brevo (300 mails a day free), Mailgun, Postmark, Amazon SES (cheapest at volume). Gmail with an app password works for a quick try
+but sends as your Gmail address, which is fine for testing and not for members.
+
+**2. Send from your own domain.** Add the domain in the provider's dashboard. It lists DNS records to add at your domain registrar:
+* **SPF**: one `TXT` record on the domain, e.g. `v=spf1 include:<provider> ~all`. There must be only ONE `v=spf1` record: if one
+  exists already, add the provider's `include:` to it.
+* **DKIM**: one or two records (`TXT` or `CNAME`) with a name like `<selector>._domainkey`. The provider says when it sees them.
+* **DMARC**: a `TXT` record on `_dmarc.<domain>`; start with `v=DMARC1; p=none; rua=mailto:you@<domain>` and tighten it to
+  `p=quarantine` once mail is arriving fine.
+
+DNS changes take minutes to a few hours. Gmail and Yahoo reject or spam-folder mail from domains without SPF/DKIM/DMARC.
+
+**3. Put the settings in `.env`** (then restart):
 ```
+SITE_URL=https://your.domain             # REQUIRED with real mail: the links in mails point here
 SMTP_HOST=smtp.your-provider.com
 SMTP_PORT=587
 SMTP_USER=your-login
-SMTP_PASSWORD=your-password-or-app-password
-SMTP_FROM=noreply@your-domain.com        # an address on a domain you control
-SMTP_SECURITY=starttls                   # or ssl (port 465)
+SMTP_PASSWORD=your-smtp-key              # the provider's SMTP key / app password, not your account password
+SMTP_FROM="Your Site <noreply@your.domain>"
+SMTP_SECURITY=starttls                   # or ssl with port 465
 ```
-Any SMTP service works: Brevo, Mailgun, Amazon SES, Postmark, or Gmail with an app password (fine for a pilot, limited volume). For
-mail to reach inboxes and not spam folders, add **SPF, DKIM and DMARC** records for the sending domain (your provider shows them).
+`SITE_URL` matters for security: without it the links are built from the host name a request claims, so a forged
+"forgot password" request could mail a member a reset link pointing at someone else's site. The app logs a warning at startup.
+
+**4. Check it.**
+```
+flask --app wsgi doctor --online         # logs in to the mail server, looks up SPF and DMARC for the SMTP_FROM domain
+flask --app wsgi send-test-mail you@gmail.com
+```
+`send-test-mail` sends straight away and prints the server's answer (a wrong password, a sender the provider has not verified...).
+Send one to a Gmail address and use "Show original": SPF, DKIM and DMARC should all say `PASS`. Then sign up on the site with a
+real address and open the link.
+
+When the site runs, a failed delivery is logged as `SMTP delivery FAILED (<the server's answer>)` and the page carries on.
+
 To try the flow in development without a mail server, set `REQUIRE_EMAIL_VERIFICATION=1` and leave `SMTP_HOST` empty: the link is
 printed in the terminal where the app runs.
